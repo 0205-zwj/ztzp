@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>中铁装配 钢结构构件信息</title>
+    <!-- 官方model-viewer组件，自带手机端优化和Draco解压支持，用jsdelivr国内稳定CDN -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <style>
+        * {margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft Yahei",sans-serif;}
+        body {background:#f4f5f7;padding:12px;max-width:100%;margin:0 auto;}
+        .header {background:#00529B;color:#fff;padding:14px;border-radius:8px;text-align:center;margin-bottom:12px;}
+        .header h2 {font-size:17px;}
+        .header p {font-size:12px;opacity:0.9;margin-top:4px;}
+        /* 3D模型容器 */
+        .model-container {position:relative;width:100%;height:380px;background:#e8e8e8;border-radius:8px;overflow:hidden;}
+        model-viewer {width:100%;height:100%;--poster-color:#e8e8e8;}
+        /* 加载遮罩层，模型加载完自动消失 */
+        .loading-mask {position:absolute;top:0;left:0;width:100%;height:100%;background:#f0f2f5;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;}
+        .loading-text {font-size:14px;color:#666;margin-top:16px;}
+        .loading-progress {width:60%;height:6px;background:#e0e0e0;border-radius:3px;margin-top:12px;overflow:hidden;}
+        .progress-bar {height:100%;width:0%;background:#00529B;transition:width 0.3s;}
+        .spinner {width:40px;height:40px;border:4px solid #e0e0e0;border-top:4px solid #00529B;border-radius:50%;animation:spin 1s linear infinite;}
+        @keyframes spin {0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        .error-tip {display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:#fff;flex-direction:column;align-items:center;justify-content:center;z-index:10;color:#666;font-size:14px;}
+        .info-card {background:#fff;padding:14px;border-radius:8px;margin-top:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+        .info-card h3 {color:#00529B;font-size:15px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid #00529B;}
+        .info-item {display:flex;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;}
+        .info-item:last-child {border-bottom:none;}
+        .label {width:90px;color:#888;flex-shrink:0;}
+        .value {flex:1;color:#222;word-break:break-all;}
+        .tip {text-align:center;color:#999;font-size:11px;margin-top:14px;}
+    </style>
+</head>
+<body>
+<div class="header">
+    <h2>中铁装配｜钢结构构件信息</h2>
+    <p>CHINA RAILWAY EQUIPMENT</p>
+</div>
+
+<!-- 3D模型区域，带加载遮罩 -->
+<div class="model-container">
+    <model-viewer id="viewer" alt="构件3D模型" shadow-intensity="1" camera-controls auto-rotate interaction-prompt="auto" ar></model-viewer>
+    <div class="loading-mask" id="loadingMask">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">正在加载3D模型...</div>
+        <div class="loading-progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+    <div class="error-tip" id="errorTip">
+        <p>3D模型加载失败，请检查网络后刷新</p>
+    </div>
+</div>
+
+<div class="info-card">
+    <h3>构件基本信息</h3>
+    <div class="info-item"><div class="label">构件编号</div><div class="value" id="partId">-</div></div>
+    <div class="info-item"><div class="label">加工号</div><div class="value" id="workNo">-</div></div>
+    <div class="info-item"><div class="label">项目名称</div><div class="value" id="projectName">-</div></div>
+    <div class="info-item"><div class="label">分部工程</div><div class="value" id="section">-</div></div>
+    <div class="info-item"><div class="label">构件类型</div><div class="value" id="partType">-</div></div>
+    <div class="info-item"><div class="label">材质</div><div class="value" id="material">-</div></div>
+    <div class="info-item"><div class="label">规格</div><div class="value" id="spec">-</div></div>
+    <div class="info-item"><div class="label">重量</div><div class="value" id="weight">-</div></div>
+    <div class="info-item"><div class="label">数量</div><div class="value" id="quantity">-</div></div>
+</div>
+
+<div class="info-card">
+    <h3>工序与质检记录</h3>
+    <div class="info-item"><div class="label">拼装日期</div><div class="value" id="assembleDate">-</div></div>
+    <div class="info-item"><div class="label">焊接日期</div><div class="value" id="weldDate">-</div></div>
+    <div class="info-item"><div class="label">喷砂日期</div><div class="value" id="blastDate">-</div></div>
+    <div class="info-item"><div class="label">油漆日期</div><div class="value" id="paintDate">-</div></div>
+    <div class="info-item"><div class="label">质检人员</div><div class="value" id="qcPerson">-</div></div>
+    <div class="info-item"><div class="label">发运日期</div><div class="value" id="shipDate">-</div></div>
+    <div class="info-item"><div class="label">设计人</div><div class="value" id="designer">-</div></div>
+    <div class="info-item"><div class="label">项目负责人</div><div class="value" id="manager">-</div></div>
+</div>
+
+<p class="tip">中铁装配 · 钢结构构件一物一码系统</p>
+
+<script src="data.js"></script>
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+const id = urlParams.get('id');
+const viewer = document.getElementById('viewer');
+const loadingMask = document.getElementById('loadingMask');
+const loadingText = document.getElementById('loadingText');
+const progressBar = document.getElementById('progressBar');
+const errorTip = document.getElementById('errorTip');
+
+if (id && window.partData && window.partData[id]) {
+    const d = window.partData[id];
+    // 先加载模型，监听加载进度
+    viewer.src = d.glbUrl;
+    
+    // 加载进度事件
+    viewer.addEventListener('progress', (e) => {
+        if (e.total) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            progressBar.style.width = percent + '%';
+            loadingText.innerText = `正在加载3D模型... ${percent}%`;
+        }
+    });
+    
+    // 模型加载完成
+    viewer.addEventListener('load', () => {
+        loadingMask.style.display = 'none';
+    });
+    
+    // 模型加载失败
+    viewer.addEventListener('error', () => {
+        loadingMask.style.display = 'none';
+        errorTip.style.display = 'flex';
+    });
+
+    // 填充文字信息
+    const fields = ['partId','workNo','projectName','section','partType','material','spec','weight','quantity','assembleDate','weldDate','blastDate','paintDate','qcPerson','shipDate','designer','manager'];
+    fields.forEach(f => {
+        if (document.getElementById(f) && d[f]) document.getElementById(f).innerText = d[f];
+    });
+} else {
+    document.querySelector('.header h2').innerText = '构件信息未找到';
+    document.querySelector('.model-container').style.display = 'none';
+    loadingMask.style.display = 'none';
+}
+</script>
+</body>
+</html>
