@@ -19,15 +19,16 @@
             --gs:440px;--ga:1;--gc1:rgba(182,208,240,.15);--gc2:rgba(214,230,248,.09);
             /* ===== 柔光玻璃材质（Apple vibrancy 同款结构）=====
                ① 通透：底色 alpha 压到最低，让"模糊后的背景"主导面板颜色；
-               ② 顶光柔泽：光只从顶部来，底部轻微回光；
-               ③ 边缘泛光：1px 上亮下回亮折射线 + 外圈 0.5px 白描边 + 柔光晕，
-                  模拟苹果面板边缘"包着一层光"的轮廓；
+               ② 顶光柔泽：光从顶部来，弧形渐弱（苹果顶部光带更宽更柔），底部回光；
+               ③ 边缘泛光：1.5px 上亮下回亮折射线 + .5px 全周白描边 + 双层外柔光晕，
+                  边缘"包光"是苹果高级感最直观的特征；
                ④ 蚀刻微粒：3.5% 细噪点消除色带 */
-            --g-blur:blur(34px) saturate(215%) brightness(1.06);
-            --g-sheen:linear-gradient(180deg,rgba(255,255,255,.62) 0%,rgba(255,255,255,.20) 14%,rgba(255,255,255,.03) 40%,rgba(255,255,255,0) 62%,rgba(255,255,255,.08) 86%,rgba(255,255,255,.26) 100%);
+            --g-blur:blur(36px) saturate(225%) brightness(1.07);
+            --g-sheen:linear-gradient(180deg,rgba(255,255,255,.74) 0%,rgba(255,255,255,.30) 16%,rgba(255,255,255,.05) 42%,rgba(255,255,255,0) 62%,rgba(255,255,255,.09) 86%,rgba(255,255,255,.32) 100%);
+            --g-sheen-hd:linear-gradient(180deg,rgba(255,255,255,.92) 0%,rgba(255,255,255,.44) 22%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.03) 70%,rgba(255,255,255,.16) 88%,rgba(255,255,255,.42) 100%);
             --g-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-            --g-edge:linear-gradient(155deg,rgba(255,255,255,1) 0%,rgba(255,255,255,.72) 16%,rgba(255,255,255,.26) 42%,rgba(255,255,255,.14) 58%,rgba(255,255,255,.5) 82%,rgba(255,255,255,.96) 100%);
-            --g-inner:inset 0 1px 1px rgba(255,255,255,.9),inset 0 -1px 1px rgba(255,255,255,.38),inset 0 0 26px rgba(255,255,255,.10),0 0 0 .5px rgba(255,255,255,.65),0 0 22px rgba(255,255,255,.38);
+            --g-edge:linear-gradient(160deg,rgba(255,255,255,1) 0%,rgba(255,255,255,.82) 18%,rgba(255,255,255,.30) 44%,rgba(255,255,255,.18) 58%,rgba(255,255,255,.58) 82%,rgba(255,255,255,1) 100%);
+            --g-inner:inset 0 1.5px 1.5px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.42),inset 0 0 30px rgba(255,255,255,.12),0 0 0 .5px rgba(255,255,255,.8),0 0 16px rgba(255,255,255,.5),0 0 38px rgba(255,255,255,.26);
         }
         * {margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
         html,body{height:100%;overscroll-behavior:none;}
@@ -60,20 +61,28 @@
         @media (hover:none){:root{--gs:230px;--gc1:rgba(178,206,242,.19);--gc2:rgba(212,229,248,.10);}}
         .header {
             position:relative;z-index:2;
+            /* 标题框 = 全站材质标杆：最强顶光 + 1.5px 饱满边缘光带 + 内部暖白辉光 */
             background:
                 var(--g-grain),
-                var(--g-sheen),
-                rgba(250,252,255,.3);
-            backdrop-filter:var(--g-blur);
-            -webkit-backdrop-filter:var(--g-blur);
+                var(--g-sheen-hd),
+                linear-gradient(180deg,rgba(255,255,255,.30),rgba(238,246,255,.16));
+            backdrop-filter:blur(44px) saturate(240%) brightness(1.09);
+            -webkit-backdrop-filter:blur(44px) saturate(240%) brightness(1.09);
             color:#1e3a5f;padding:14px 16px;border-radius:22px;text-align:center;margin-bottom:10px;
-            box-shadow:var(--g-inner),0 8px 30px rgba(70,100,150,.08), 0 0 22px rgba(255,255,255,.7);
+            box-shadow:
+                inset 0 1.5px 1.5px rgba(255,255,255,1),
+                inset 0 -1.5px 1.5px rgba(255,255,255,.5),
+                inset 0 0 34px rgba(255,255,255,.18),
+                0 0 0 .5px rgba(255,255,255,.9),
+                0 0 20px rgba(255,255,255,.62),
+                0 0 46px rgba(210,230,255,.34),
+                0 10px 34px rgba(70,100,150,.10);
             border:1px solid transparent;
             transition:opacity .35s ease;
         }
         .header::before{
             content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--g-edge);
+            padding:1.5px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
@@ -341,7 +350,14 @@
         }
         /* ===== 进出场快照幽灵层：克隆当前画面做交叉淡化，模型用静态截图替换 ===== */
         .fs-ghost,.fs-ghost *{animation:none!important;}
-        .fs-ghost{box-sizing:border-box;}
+        .fs-ghost{box-sizing:border-box;will-change:opacity,transform;}
+        /* 快照只存在 ~450ms，其内部 backdrop-filter 会在溶解期间逐帧重算模糊 = 掉帧卡顿主源；
+           关掉后用更实的底色补偿亮度，观感无损 */
+        .fs-ghost .header,.fs-ghost .model-container,.fs-ghost .info-card,
+        .fs-ghost .model-item,.fs-ghost .ml-search input,.fs-ghost .tip-banner{
+            backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+            background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 40%),rgba(240,246,252,.82)!important;
+        }
         .fs-ghost img{display:block;background:transparent;}
         /* ===== 全屏控制按钮层 ===== */
         .fs-ctrl-layer{position:fixed;inset:0;z-index:9100;pointer-events:none;}
@@ -540,6 +556,13 @@
         body.in-fs .info-card{background:var(--g-grain),var(--g-sheen),rgba(249,252,254,.4);}
         /* 进/出全屏过渡只走 transform，提升为合成层，避免重排重绘卡顿 */
         .full-wrap.fs-anim, .model-container.fs-anim{will-change:transform;}
+        /* 动画进行期间临时关闭面板毛玻璃：父层做 transform 动画时，
+           子层 backdrop-filter 会被逐帧重算模糊 —— 这是手机上进出全屏掉帧的头号隐形杀手。
+           快照盖顶期间真实层本就不可见，关闭无观感损失 */
+        body.fs-anim .model-container,
+        body.fs-anim .info-card,
+        body.fs-anim .model-item,
+        body.fs-anim .ml-search input{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
 
         /* ===== 信息卡标题行工具按钮（复制 / 管理员） ===== */
         .info-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;padding-bottom:12px;border-bottom:1px solid rgba(50,100,180,.12);}
@@ -866,9 +889,9 @@ if(id && window.partData && partData[id]){
     viewer.autoRotate = true; rotate = true;
     if(btnRotate) btnRotate.classList.add('active');
     viewer.addEventListener('camera-change', e => {
-        if(e.detail && e.detail.source === 'user-interaction' && rotate){
-            rotate = false; viewer.autoRotate = false;
-            btnRotate.classList.remove('active');
+        if(e.detail && e.detail.source === 'user-interaction'){
+            if(rotate){ rotate = false; viewer.autoRotate = false; btnRotate.classList.remove('active'); }
+            try{ scheduleShot(1100); }catch(_){}   /* 用户拖完停稳后趁空闲刷新快照缓存 */
         }
     });
     viewer.addEventListener('progress', e => {
@@ -885,6 +908,7 @@ if(id && window.partData && partData[id]){
     viewer.addEventListener('load', () => {
         bar.style.width = '100%'; percent.innerText = '100%';
         $('#loadingSub').innerText = '加载完成';
+        try{ scheduleShot(900); }catch(_){}   /* 加载完成后趁空闲预缓存一张快照 */
         setTimeout(()=>{
             loading.style.opacity = '0';
             setTimeout(()=>{ loading.style.display = 'none'; }, 450);
@@ -1024,6 +1048,7 @@ function enterFullscreen(type, isSwitch, reuse){
         /* 已经在全屏里：可点即响应，先收场再展开另一种全屏 */
     }
     try{ resetGestureState(false); }catch(e){}
+    document.body.classList.add('fs-anim');   /* 动画期间临时关闭面板毛玻璃，落位后移除恢复 */
     const el = type === 'model' ? modelContainer : fullWrap;
     const rect = el.getBoundingClientRect();
     const srcRect = type === 'page' ? modelContainer.getBoundingClientRect() : rect;
@@ -1144,6 +1169,7 @@ function enterFullscreen(type, isSwitch, reuse){
             el.style.opacity = "1";
             if(!reuse){ bg.style.transition = "opacity 460ms " + EASE; bg.style.opacity = "1"; }
             fadeGhostOut(homeGhost, {dur:400, to:'scale(1.016) translateY(-3px)'});
+            try{ document.body.classList.remove('fs-anim'); }catch(_){}
             return;
         }
         const dur = isSwitch ? 460 : FS_IN_MS;
@@ -1152,7 +1178,9 @@ function enterFullscreen(type, isSwitch, reuse){
         el.style.opacity = "1";
         if(!reuse){ bg.style.transition = "opacity 460ms " + EASE; bg.style.opacity = "1"; }
         fadeGhostOut(homeGhost, {dur:Math.round(dur*.86)});
-        setTimeout(safeResize, 80);
+        /* resize 会重建 WebGL 画布，放动画中段必掉帧 —— 延后到落位结束后再执行 */
+        setTimeout(()=>{ try{ document.body.classList.remove('fs-anim'); }catch(_){} try{ safeResize(); }catch(_){} }, dur + 120);
+        try{ scheduleShot(dur + 500); }catch(_){}   /* 全屏取景稳定后再刷缓存，供退出/互切零成本取用 */
     }));
     setTimeout(()=>{ ctrl.querySelectorAll(".fs-ctrl").forEach(b=>b.classList.add("show")); }, 200);
 }
@@ -1165,11 +1193,32 @@ function requestExitFullscreen(){
 window.addEventListener('popstate', () => {
     if(fsState){ fsPushed = false; exitFullscreen(); }
 });
-/* 克隆当前画面为静态快照（模型用 toDataURL 截图替换，绝不新建第二个 WebGL 上下文），
+/* 克隆当前画面为静态快照（模型用预缓存截图替换，绝不新建第二个 WebGL 上下文），
    让真实结构可立即复位/重建，快照在最上层交叉淡出，从根上消除单元素搬移造成的白闪/跳变 */
+/* ===== 模型截图预缓存 =====
+   toDataURL 是 WebGL 回读，手机上同步执行要阻塞主线程 100~300ms ——
+   放在动画起点执行就是"点下去卡一下再动"的卡顿根源。
+   改为：模型加载后、视角停稳后、每次过渡收尾后，趁空闲预截一张；
+   真正要快照时零成本取缓存，动画第一帧就能起跑 */
+let shotCache = '', shotTimer = null;
+function scheduleShot(delay){
+    clearTimeout(shotTimer);
+    shotTimer = setTimeout(()=>{
+        const grab = () => {
+            try{
+                if(viewer && viewer.src && typeof viewer.toDataURL === 'function'){
+                    shotCache = viewer.toDataURL('image/webp',0.82) || shotCache;
+                }
+            }catch(e){}
+        };
+        /* 优先在浏览器空闲时截图；自旋时主线程仍有间隙，timeout 兜底保证最终会刷新 */
+        if('requestIdleCallback' in window) requestIdleCallback(grab, {timeout:2200});
+        else setTimeout(grab, 120);
+    }, delay==null ? 600 : delay);
+}
 function captureGhost(src){
     try{
-        let shot=''; try{ shot = viewer.toDataURL('image/webp',0.82) || ''; }catch(e){}
+        const shot = shotCache;
         const g = src.cloneNode(true);
         g.removeAttribute('id'); g.classList.add('fs-ghost');
         g.querySelectorAll('model-viewer').forEach(mv=>{
@@ -1181,6 +1230,8 @@ function captureGhost(src){
         g.querySelectorAll('.toolbar,#loading,.tip-banner,.progress,.fs-dock,.fs-ctrl-layer').forEach(n=>n.remove());
         const r=src.getBoundingClientRect();
         g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;';
+        /* 清掉源元素残留的 transform（横屏快照尤其重要），并预提升为合成层 */
+        g.style.transform='none'; g.style.transformOrigin='center center'; g.style.willChange='opacity,transform';
         document.body.appendChild(g);
         return g;
     }catch(e){ return null; }
@@ -1203,6 +1254,7 @@ function exitFullscreen(){
     const { el, type, saved, bg, ctrl, rect } = state;
     /* 横屏复位放到 land() 里，避免退出瞬间闪跳 */
     state.exiting = true;
+    document.body.classList.add('fs-anim');   /* 退出动画期间同样临时关闭面板毛玻璃 */
     try{ resetGestureState(false); }catch(e){}
     if(state.inTimer){ clearTimeout(state.inTimer); state.inTimer = null; }
     const switching = pendingFs; pendingFs = null;
@@ -1213,7 +1265,7 @@ function exitFullscreen(){
         /* 互切：冻结旧全屏快照，真实结构立即复位并重建新全屏，新画面在快照下淡入、快照同时淡出（交叉淡化，无白闪） */
         const ghost = captureGhost(el);
         restoreLayout(el, state, bg, ctrl, true);
-        safeResize();
+        /* 互切起点不做 safeResize（WebGL 重建会卡住第一帧）；enterFullscreen 落位后会统一 resize */
         void el.offsetHeight;
         enterFullscreen(switching, true, {bg, ctrl});
         fadeGhostOut(ghost, {dur:440, to:'scale(.994)'});
@@ -1222,7 +1274,8 @@ function exitFullscreen(){
            全屏快照盖在最上层柔和淡出 —— 不存在两层同时半透明的窗口，无闪白、无下沉眩晕感 */
         const ghost = captureGhost(el);
         restoreLayout(el, state, bg, ctrl);
-        safeResize();
+        /* 不在动画起点 safeResize：WebGL 画布重建放这里必掉帧；
+           快照盖顶期间真实层不可见，收尾的 700ms 回调会统一 resize */
         void el.offsetHeight;
         fullWrap.style.transition='none'; fullWrap.style.opacity='1'; fullWrap.style.transform='scale(.985)';
         void fullWrap.offsetHeight;
@@ -1231,7 +1284,7 @@ function exitFullscreen(){
             fullWrap.style.transform='scale(1)';
         }));
         fadeGhostOut(ghost, {dur:470, to:'scale(.985)'});
-        setTimeout(()=>{ fullWrap.style.transition=''; fullWrap.style.opacity=''; fullWrap.style.transform=''; try{ safeResize(); }catch(e){} }, 700);
+        setTimeout(()=>{ fullWrap.style.transition=''; fullWrap.style.opacity=''; fullWrap.style.transform=''; try{ document.body.classList.remove('fs-anim'); }catch(e){} try{ safeResize(); }catch(e){} try{ scheduleShot(400); }catch(e){} }, 700);
     }
 }
 /* 主页“从左下角铺开淡入”：WAAPI，结束即取消，避免 transform 残留成为 fixed 包含块 */
@@ -1292,24 +1345,18 @@ function applyOrientation(){
     if(fsState.ctrl) fsState.ctrl.classList.toggle('fs-ls', css);
     fullWrap.classList.toggle('ls-card', css);
     try{ syncControls(); }catch(e){}
-    /* 位、尺寸与旋转放进同一条过渡做连续形变：
-       之前只过渡 transform，left/top/width/height 瞬变会让首帧"啪"地跳一下再转，就是闪跳感来源 */
-    const t = (ORI_MS/1000) + 's ' + ORI_EASE;
-    el.style.transition = 'transform ' + t + ', left ' + t + ', top ' + t + ', width ' + t + ', height ' + t + ', border-radius ' + t;
+    /* 纯 transform 旋转（rotate+等比 scale）：全程零重排。
+       动画化 width/height/left/top 会让 WebGL 画布逐帧重建 = 横屏卡顿的头号来源；
+       几何盒始终 100vw×100vh 不动，视觉旋转全部交给合成层的 transform */
+    el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
     el.style.transformOrigin = 'center center';
-    if(css){
-        el.style.left='50%'; el.style.top='50%';
-        el.style.width='100vh'; el.style.height='100vw';
-        el.style.transform='translate(-50%,-50%) rotate(90deg)';
-    } else {
-        el.style.left='0'; el.style.top='0';
-        el.style.width='100vw'; el.style.height='100vh';
-        el.style.transform='none';
-    }
+    el.style.left = '0px'; el.style.top = '0px';
+    el.style.width = '100vw'; el.style.height = '100vh';
+    el.style.transform = css ? ('rotate(90deg) scale(' + (window.innerHeight/window.innerWidth).toFixed(5) + ')') : 'none';
     try{ resetGestureState(true); }catch(e){}
     showToast(want ? '横屏模式' : '竖屏模式');
-    try{ safeResize(); }catch(e){}
-    setTimeout(function(){ resetCameraView(); setTimeout(safeResize, 80); }, 300);
+    /* resize 与相机复位放到旋转收尾之后，动画期间主线程零打扰 */
+    setTimeout(function(){ try{ safeResize(); }catch(e){} resetCameraView(); setTimeout(safeResize, 80); }, ORI_MS + 60);
 }
 function toggleLandscape(){
     if(!fsState || fsState.type !== 'model') return;
