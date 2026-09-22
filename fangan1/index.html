@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -16,39 +16,37 @@
             --e-settle:cubic-bezier(.32,.72,0,1);
             --e-expo:cubic-bezier(.16,1,.3,1);
             --e-leave:cubic-bezier(.5,0,.68,.3);
-            --e-move:cubic-bezier(.16,.85,.24,1);
             --gs:440px;--ga:1;--gc1:rgba(182,208,240,.15);--gc2:rgba(214,230,248,.09);
-            /* ===== 柔光玻璃材质（对标澎湃 OS 4）=====
-               四层结构：噪点微粒 → 135° 表面高光 → 半透明底色 → 边缘上亮下暗折射光带；
-               再配 blur+saturate 把背后色彩"揉"进玻璃里 */
-            --glass-noise:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .045 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-            --glass-spec:linear-gradient(135deg,rgba(255,255,255,.58) 0%,rgba(255,255,255,.16) 34%,rgba(255,255,255,.04) 55%,rgba(255,255,255,.12) 78%,rgba(255,255,255,.34) 100%);
-            --glass-spec-soft:linear-gradient(135deg,rgba(255,255,255,.40) 0%,rgba(255,255,255,.10) 34%,rgba(255,255,255,.02) 55%,rgba(255,255,255,.07) 78%,rgba(255,255,255,.22) 100%);
-            --glass-tint:rgba(243,248,252,.52);
-            --glass-edge:linear-gradient(to bottom,rgba(255,255,255,.96),rgba(255,255,255,.46) 38%,rgba(255,255,255,.16) 68%,rgba(255,255,255,.42));
-            --glass-blur:blur(42px) saturate(205%) brightness(1.015);
-            --glass-inner:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(255,255,255,.3),inset 0 10px 28px rgba(255,255,255,.14);
-            --glass-shadow:0 12px 42px rgba(70,100,150,.10),0 2px 10px rgba(70,100,150,.05);
+            /* ===== 柔光玻璃材质（对标 Apple vibrancy / 澎湃 OS 4）=====
+               苹果质感的关键不是"整片斜向反光"（那是塑料），而是：
+               ① 光只从顶部来 —— 上缘一条渐弱柔泽，底部轻微回光；
+               ② 边缘 1px 折射线 —— 上最亮、两侧沉下去、底缘再微微回亮；
+               ③ 玻璃把背景"提亮 + 提饱和"揉进来，而不是压灰；
+               ④ 极细的磨砂微粒（3% 透明度）消除色带，模拟蚀刻玻璃表面 */
+            --g-blur:blur(30px) saturate(190%) brightness(1.045);
+            --g-sheen:linear-gradient(180deg,rgba(255,255,255,.52) 0%,rgba(255,255,255,.16) 12%,rgba(255,255,255,.02) 38%,rgba(255,255,255,0) 62%,rgba(255,255,255,.06) 86%,rgba(255,255,255,.20) 100%);
+            --g-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .032 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+            --g-edge:linear-gradient(155deg,rgba(255,255,255,.98) 0%,rgba(255,255,255,.66) 16%,rgba(255,255,255,.22) 42%,rgba(255,255,255,.10) 58%,rgba(255,255,255,.42) 82%,rgba(255,255,255,.90) 100%);
+            --g-inner:inset 0 1px 1px rgba(255,255,255,.85),inset 0 -1px 1px rgba(255,255,255,.32);
         }
         * {margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
         html,body{height:100%;overscroll-behavior:none;}
         body {
-            /* 环境彩光：澎湃 OS 柔光玻璃的高级感来自"壁纸颜色透进玻璃"。
-               底色上叠四团极淡的天蓝/雾绿/藕紫/暖日光斑，玻璃面板把它们揉进自身 */
+            /* 柔光玻璃必须"透出颜色"才成立：底层铺几团极淡的环境彩光，
+               玻璃面板把它们揉进自身，才有截图里那种温润的色调层次 */
             background:
-                radial-gradient(46% 38% at 84% 6%, rgba(196,224,255,.55), transparent 62%),
-                radial-gradient(42% 36% at 8% 24%, rgba(210,238,226,.42), transparent 60%),
-                radial-gradient(50% 40% at 88% 84%, rgba(236,220,246,.45), transparent 64%),
-                radial-gradient(44% 34% at 10% 94%, rgba(250,232,214,.40), transparent 60%),
+                radial-gradient(46% 40% at 86% 4%, rgba(184,214,250,.34), transparent 62%),
+                radial-gradient(40% 34% at 4% 26%, rgba(198,234,220,.24), transparent 60%),
+                radial-gradient(50% 42% at 92% 78%, rgba(226,208,244,.28), transparent 64%),
+                radial-gradient(44% 36% at 8% 96%, rgba(250,226,204,.24), transparent 60%),
                 linear-gradient(160deg,#fcfdfe 0%,#f5f9fc 52%,#f8f7fb 100%);
             background-attachment:fixed;
             padding:14px;max-width:100%;margin:0 auto;
             font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
             overflow-x:hidden;
-            animation:pageIn .5s var(--e-settle);
+            animation:pageIn .5s cubic-bezier(.22,1,.36,1);
         }
-        /* 只用透明度做首屏淡入：body 上的 transform 会让所有 fixed 子元素跟着跳位，表现就是闪一下 */
-        @keyframes pageIn {from{opacity:0}to{opacity:1}}
+        @keyframes pageIn {from{opacity:0;transform:translateY(12px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
         .glow {
             position:fixed;left:0;top:0;width:var(--gs);height:var(--gs);border-radius:50%;
             background:radial-gradient(circle,var(--gc1) 0%,var(--gc2) 40%,transparent 70%);
@@ -62,21 +60,19 @@
         .header {
             position:relative;z-index:2;
             background:
-                var(--glass-noise),
-                var(--glass-spec-soft),
-                rgba(246,249,252,.6);
-            backdrop-filter:var(--glass-blur);
-            -webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(248,251,254,.5);
+            backdrop-filter:var(--g-blur);
+            -webkit-backdrop-filter:var(--g-blur);
             color:#1e3a5f;padding:14px 16px;border-radius:22px;text-align:center;margin-bottom:10px;
+            box-shadow:var(--g-inner),0 8px 30px rgba(70,100,150,.08), 0 0 22px rgba(255,255,255,.7);
             border:1px solid transparent;
-            box-shadow:
-                var(--glass-inner),
-                0 8px 30px rgba(70,100,150,.08), 0 0 22px rgba(255,255,255,.7);
             transition:opacity .35s ease;
         }
         .header::before{
-            content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--glass-edge);
+            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+            padding:1px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
@@ -87,29 +83,26 @@
         .model-container {
             position:relative;width:100%;height:520px;
             background:
-                var(--glass-noise),
-                var(--glass-spec-soft),
-                rgba(242,247,251,.5);
-            backdrop-filter:var(--glass-blur);
-            -webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(244,249,253,.42);
+            backdrop-filter:var(--g-blur);
+            -webkit-backdrop-filter:var(--g-blur);
             border-radius:26px;overflow:hidden;
-            box-shadow:
-                var(--glass-inner),
-                0 16px 46px rgba(70,100,150,.09), 0 0 26px rgba(255,255,255,.65);
+            box-shadow:var(--g-inner),0 16px 46px rgba(70,100,150,.09), 0 0 26px rgba(255,255,255,.65);
             border:1px solid transparent;
             transition:box-shadow .35s ease,border-color .35s ease;
         }
+        /* overflow:hidden 会把外扩描边裁掉，折射线画在内缘 */
         .model-container::before{
-            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:21;
-            padding:1px;background:var(--glass-edge);
+            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:22;
+            padding:1px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
         }
         .model-container:hover{
-            box-shadow:
-                var(--glass-inner),
-                0 20px 52px rgba(70,100,150,.10), 0 0 34px rgba(226,238,248,.8);
+            box-shadow:var(--g-inner),0 20px 52px rgba(70,100,150,.10), 0 0 34px rgba(226,238,248,.8);
         }
         model-viewer {
             width:100%;height:100%;
@@ -134,80 +127,84 @@
         .btn{
             position:relative;width:42px;height:42px;border-radius:50%;
             background:
-                var(--glass-noise),
-                var(--glass-spec),
-                linear-gradient(145deg,rgba(255,255,255,.84),rgba(224,238,252,.62));
-            backdrop-filter:var(--glass-blur);
-            -webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(250,252,255,.5);
+            backdrop-filter:var(--g-blur);
+            -webkit-backdrop-filter:var(--g-blur);
             color:#2563a8;border:1px solid transparent;
             font-size:18px;cursor:pointer;
-            box-shadow:
-                var(--glass-inner),
-                0 4px 14px rgba(50,100,180,.12),0 0 0 1px rgba(150,190,255,.16),0 0 14px rgba(150,190,255,.24);
-            transition:transform .22s var(--e-settle),box-shadow .3s ease,background .25s ease;
+            box-shadow:var(--g-inner),0 4px 14px rgba(50,100,180,.12),0 0 14px rgba(150,190,255,.24);
+            transition:transform .22s cubic-bezier(.22,1,.36,1),box-shadow .3s ease,background .25s ease;
             display:flex;align-items:center;justify-content:center;
         }
         .btn::before{
-            content:'';position:absolute;inset:-1px;border-radius:50%;pointer-events:none;
-            padding:1px;background:var(--glass-edge);
+            content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;
+            padding:1px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
         }
         .btn:active{transform:scale(.88);transition-duration:.1s;}
-        .btn:hover{box-shadow:var(--glass-inner),0 6px 20px rgba(50,100,180,.2),0 0 0 1px rgba(150,190,255,.34),0 0 24px rgba(150,190,255,.55);}
-        .btn.active{background:var(--glass-noise),var(--glass-spec),linear-gradient(145deg,rgba(214,234,254,.98),rgba(184,214,248,.92));color:#1d5fae;box-shadow:var(--glass-inner),0 0 0 2.5px rgba(123,168,240,.42),0 6px 18px rgba(90,140,210,.24),0 0 22px rgba(150,190,255,.55);}
+        .btn:hover{box-shadow:var(--g-inner),0 6px 20px rgba(50,100,180,.2),0 0 24px rgba(150,190,255,.55);}
+        .btn.active{background:var(--g-grain),var(--g-sheen),rgba(214,234,254,.72);color:#1d5fae;box-shadow:var(--g-inner),0 0 0 2.5px rgba(123,168,240,.42),0 6px 18px rgba(90,140,210,.24),0 0 22px rgba(150,190,255,.6);animation:activeBreath 2.8s ease-in-out infinite;}
+        @keyframes activeBreath{0%,100%{box-shadow:0 0 0 2.5px rgba(123,168,240,.42),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 20px rgba(150,190,255,.5);}50%{box-shadow:0 0 0 2.5px rgba(123,168,240,.30),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 28px rgba(150,190,255,.72);}}
         .tip-banner{
             position:absolute;left:50%;transform:translateX(-50%) translateY(-8px);
             top:20px;z-index:21;color:#2563a8;font-size:12px;
             background:
-                var(--glass-noise),
-                linear-gradient(135deg,rgba(255,255,255,.9),rgba(255,255,255,.55) 48%,rgba(255,255,255,.78));
-            backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(252,253,255,.66);
+            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
             padding:8px 18px;border-radius:26px;white-space:nowrap;
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 8px 24px rgba(50,100,180,.15);
+            box-shadow:var(--g-inner),0 8px 24px rgba(50,100,180,.15);
+            border:1px solid transparent;
             opacity:0;pointer-events:none;
-            transition:opacity .35s ease, transform .45s var(--e-settle);
+            transition:opacity .35s ease, transform .45s cubic-bezier(.22,1,.36,1);
         }
         .tip-banner.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
         .toast{
-            position:fixed;left:50%;top:50%;transform:translate(-50%,calc(-50% + 10px));
+            position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);
             z-index:9300;color:#2563a8;font-size:14px;font-weight:500;
             background:
-                var(--glass-noise),
-                linear-gradient(135deg,rgba(255,255,255,.95),rgba(255,255,255,.6) 48%,rgba(255,255,255,.82));
-            backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(252,253,255,.72);
+            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
             padding:14px 28px;border-radius:26px;
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 16px 48px rgba(50,100,180,.25);
+            box-shadow:var(--g-inner),0 16px 48px rgba(50,100,180,.25);
+            border:1px solid transparent;
             opacity:0;pointer-events:none;
-            transition:opacity .26s ease, transform .44s var(--e-settle);
+            transition:opacity .3s ease, transform .35s cubic-bezier(.22,1,.36,1);
         }
-        .toast.show{opacity:1;transform:translate(-50%,-50%);}
+        .toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
         .model-list{
             position:fixed;left:0;right:0;bottom:0;z-index:9201;
             display:flex;flex-direction:column;
             height:52vh;max-height:70vh;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
             background:
-                var(--glass-noise),
-                var(--glass-spec-soft),
-                rgba(246,249,252,.72);
-            backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
-            border-radius:28px 28px 0 0;border-top:1px solid rgba(255,255,255,.9);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(248,251,254,.66);
+            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
+            border-radius:28px 28px 0 0;border-top:1px solid rgba(255,255,255,.95);
             transform:translateY(105%);transition:transform .56s var(--e-settle),height .42s var(--e-settle);
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 -14px 50px rgba(50,100,180,.28),0 0 40px rgba(140,180,255,.18);
+            box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 -14px 50px rgba(50,100,180,.28),0 0 40px rgba(140,180,255,.18);
         }
         .model-list.show{transform:translateY(0);}
         .model-list .drag-handle{width:38px;height:4px;border-radius:2px;background:rgba(100,140,200,.28);margin:0 auto 10px;flex:0 0 auto;}
         .ml-title{color:#1e3a5f;font-size:15px;font-weight:600;text-align:center;margin:0 0 10px;flex:0 0 auto;}
         .ml-count{font-size:11px;font-weight:500;color:#6f93c8;background:rgba(123,168,240,.16);padding:2px 9px;border-radius:20px;margin-left:6px;vertical-align:1px;}
         .ml-search{position:relative;flex:0 0 auto;margin:0 2px 10px;}
-        .ml-search input{width:100%;box-sizing:border-box;height:40px;border-radius:20px;border:1px solid rgba(255,255,255,.9);
+        .ml-search input{width:100%;box-sizing:border-box;height:40px;border-radius:20px;border:1px solid transparent;
             background:
-                var(--glass-noise),
-                linear-gradient(135deg,rgba(255,255,255,.6),rgba(255,255,255,.36) 50%,rgba(255,255,255,.52));
-            backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(255,255,255,.4);
+            backdrop-filter:blur(20px) saturate(170%) brightness(1.03);-webkit-backdrop-filter:blur(20px) saturate(170%) brightness(1.03);
             padding:0 38px 0 38px;font-size:13px;color:#1e3a5f;outline:none;
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(255,255,255,.35),0 4px 14px rgba(50,100,180,.08);
+            box-shadow:var(--g-inner),0 4px 14px rgba(50,100,180,.08);
             transition:border-color .25s ease,box-shadow .25s ease,background .25s ease;}
         .ml-search input::placeholder{color:#8aa6cc;}
         .ml-search input:focus{border-color:rgba(123,168,240,.75);background:rgba(255,255,255,.82);
@@ -228,11 +225,11 @@
         .model-item{position:relative;overflow:hidden;
             padding:8px 11px;border-radius:13px;cursor:pointer;
             background:
-                var(--glass-noise),
-                linear-gradient(135deg,rgba(255,255,255,.72),rgba(255,255,255,.28) 44%,rgba(231,240,252,.44)),
-                linear-gradient(150deg,rgba(255,255,255,.78),rgba(231,240,252,.6));
+                var(--g-grain),
+                var(--g-sheen),
+                linear-gradient(150deg,rgba(255,255,255,.6),rgba(231,240,252,.44));
             border:1px solid rgba(255,255,255,.92);
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(255,255,255,.35),0 4px 14px rgba(50,100,180,.1),0 0 0 1px rgba(150,190,255,.08);
+            box-shadow:var(--g-inner),0 4px 14px rgba(50,100,180,.1),0 0 0 1px rgba(150,190,255,.08);
             opacity:0;transform:translateY(14px);
             transition:opacity .38s ease,transform .24s var(--e-settle),box-shadow .26s ease,border-color .26s ease,background .26s ease;}
         .model-list.show .model-item{opacity:1;transform:translateY(0);}
@@ -289,31 +286,27 @@
         .info-card{
             position:relative;
             background:
-                var(--glass-noise),
-                var(--glass-spec-soft),
-                rgba(246,249,252,.6);
-            backdrop-filter:var(--glass-blur);
-            -webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(248,251,254,.5);
+            backdrop-filter:var(--g-blur);
+            -webkit-backdrop-filter:var(--g-blur);
             padding:18px;border-radius:26px;margin-top:14px;
             display:flex;flex-direction:column;gap:9px;
-            box-shadow:
-                var(--glass-inner),
-                0 12px 40px rgba(70,100,150,.07), 0 0 24px rgba(255,255,255,.6);
+            box-shadow:var(--g-inner),0 12px 40px rgba(70,100,150,.07), 0 0 24px rgba(255,255,255,.6);
             border:1px solid transparent;
-            transition:opacity .4s ease, transform .45s var(--e-settle), box-shadow .35s ease, border-color .35s ease;
+            transition:opacity .4s ease, transform .45s cubic-bezier(.22,1,.36,1), box-shadow .35s ease, border-color .35s ease;
         }
         .info-card::before{
-            content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--glass-edge);
+            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+            padding:1px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
         }
         /* 整个信息卡外框：悬停泛起大范围柔紫蓝光晕（区别于小格局部光） */
         .info-card:hover{
-            box-shadow:
-                var(--glass-inner),
-                0 16px 48px rgba(60,92,140,.12), 0 0 40px rgba(202,220,244,.30), 0 0 24px rgba(206,224,246,.18);
+            box-shadow:var(--g-inner),0 16px 48px rgba(60,92,140,.12), 0 0 40px rgba(202,220,244,.30), 0 0 24px rgba(206,224,246,.18);
         }
         .info-card h3{color:#1e3a5f;font-size:16px;margin-bottom:4px;padding-bottom:12px;border-bottom:1px solid rgba(50,100,180,.12);font-weight:600;}
         .info-card .row{
@@ -321,10 +314,11 @@
             display:flex;align-items:center;
             padding:11px 14px;border-radius:12px;font-size:14px;line-height:1.5;
             background:
-                var(--glass-noise),
-                linear-gradient(135deg,rgba(255,255,255,.66),rgba(255,255,255,.34) 46%,rgba(255,255,255,.5));
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(255,255,255,.42);
             border:1px solid rgba(255,255,255,.75);
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 2px 8px rgba(70,100,150,.05);
+            box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 2px 8px rgba(70,100,150,.05);
             transition:box-shadow .3s ease,border-color .3s ease,background .3s ease;
         }
         .info-card .k{width:92px;color:#6088b8;flex-shrink:0;font-weight:400;}
@@ -335,44 +329,49 @@
         .fs-bg{
             position:fixed;inset:0;z-index:8999;pointer-events:none;
             background:
-                radial-gradient(52% 40% at 86% 4%, rgba(190,220,252,.5), transparent 62%),
-                radial-gradient(44% 36% at 4% 28%, rgba(206,236,222,.36), transparent 60%),
-                radial-gradient(54% 42% at 92% 88%, rgba(234,216,246,.42), transparent 64%),
-                radial-gradient(46% 34% at 6% 96%, rgba(250,230,210,.34), transparent 60%),
+                radial-gradient(50% 40% at 86% 2%, rgba(184,214,250,.30), transparent 62%),
+                radial-gradient(42% 34% at 2% 30%, rgba(198,234,220,.20), transparent 60%),
+                radial-gradient(52% 42% at 94% 86%, rgba(226,208,244,.24), transparent 64%),
+                radial-gradient(44% 34% at 6% 98%, rgba(250,226,204,.20), transparent 60%),
                 radial-gradient(1200px 820px at 72% -12%, rgba(190,216,242,.10), transparent 64%),
                 radial-gradient(1000px 720px at 8% 112%, rgba(210,205,234,.07), transparent 64%),
                 linear-gradient(160deg,#fefeff 0%,#f6fafc 52%,#f9f8fc 100%);
             opacity:0;transition:opacity .5s cubic-bezier(.22,.61,.36,1);
         }
+        /* ===== 进出场快照幽灵层：克隆当前画面做交叉淡化，模型用静态截图替换 ===== */
+        .fs-ghost,.fs-ghost *{animation:none!important;}
+        .fs-ghost{box-sizing:border-box;}
+        .fs-ghost img{display:block;background:transparent;}
         /* ===== 全屏控制按钮层 ===== */
         .fs-ctrl-layer{position:fixed;inset:0;z-index:9100;pointer-events:none;}
         .fs-ctrl{
             position:absolute;width:46px;height:46px;border-radius:50%;
             background:
-                var(--glass-noise),
-                var(--glass-spec),
-                linear-gradient(145deg,rgba(255,255,255,.92),rgba(238,244,250,.62));
-            backdrop-filter:var(--glass-blur);
-            -webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(250,252,255,.56);
+            backdrop-filter:var(--g-blur);
+            -webkit-backdrop-filter:var(--g-blur);
             border:1px solid transparent;
-            box-shadow:
-                var(--glass-inner),
-                0 10px 30px rgba(70,100,150,.10),inset 0 -2px 6px rgba(214,226,240,.14),
-                0 0 16px rgba(255,255,255,.75),0 0 28px rgba(206,226,246,.22);
+            box-shadow:var(--g-inner),0 10px 30px rgba(70,100,150,.10),inset 0 -2px 6px rgba(214,226,240,.14),0 0 16px rgba(255,255,255,.75),0 0 28px rgba(206,226,246,.22);
             display:flex;align-items:center;justify-content:center;
             cursor:pointer;color:#2563a8;pointer-events:auto;
-            opacity:0;transform:translateY(6px);
-            transition:opacity .4s var(--e-settle), transform .4s var(--e-settle), background .25s ease, color .25s ease,
+            opacity:0;transform:scale(.92) translateY(8px);
+            transition:opacity .42s var(--e-expo), transform .56s var(--e-settle), background .25s ease, color .25s ease,
                        left .52s var(--e-settle), right .52s var(--e-settle), top .52s var(--e-settle), bottom .52s var(--e-settle);
         }
         .fs-ctrl::before{
-            content:'';position:absolute;inset:-1px;border-radius:50%;pointer-events:none;
-            padding:1px;background:var(--glass-edge);
+            content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;
+            padding:1px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
         }
-        .fs-ctrl.show{opacity:1;transform:translateY(0);}
+        .fs-ctrl.show{opacity:1;transform:scale(1) translateY(0);animation:ctrlGlow 5.6s ease-in-out .9s infinite;}
+        @keyframes ctrlGlow{
+            0%,100%{box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.65),0 0 14px rgba(255,255,255,.6),0 0 24px rgba(206,226,246,.18);}
+            50%{box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.85),0 0 22px rgba(255,255,255,.95),0 0 40px rgba(214,230,246,.30),0 0 60px rgba(220,234,248,.18);}
+        }
         .fs-ctrl:active{transform:scale(.85);}
         .fs-exit{top:calc(16px + env(safe-area-inset-top));left:16px;right:auto;bottom:auto;}
         .fs-pagebtn,.fs-modelbtn{top:calc(16px + env(safe-area-inset-top));right:16px;left:auto;bottom:auto;}
@@ -400,12 +399,21 @@
         .full-wrap.model-backdrop.ls-card .info-card .info-head{flex:0 0 100%;margin:0 0 1px;font-size:13px;padding:0;}
         .full-wrap.model-backdrop.ls-card .info-card .row{flex:1 1 44%;min-width:0;padding:1px 4px;margin:0;border-bottom:none;font-size:10.5px;min-height:0;line-height:1.25;}
         .full-wrap.model-backdrop.ls-card .info-card .row .k,.full-wrap.model-backdrop.ls-card .info-card .row .v{font-size:10.5px;}
-        .full-wrap.model-backdrop .info-card{transition:left .5s var(--e-settle),right .5s var(--e-settle),top .5s var(--e-settle),bottom .5s var(--e-settle),transform .5s var(--e-settle);}
+        .full-wrap.model-backdrop .info-card{transition:left .5s var(--e-settle),right .5s var(--e-settle),top .5s var(--e-settle),bottom .5s var(--e-settle),transform .54s var(--e-settle);}
         /* 悬浮眼睛按钮：收起信息时显示小红点提示 */
         .fs-eye .eye-badge{display:none;position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#e0566b;box-shadow:0 0 8px rgba(224,86,107,.8);}
         .fs-eye.collapsed .eye-badge{display:block;}
         .fs-ctrl.active{background:linear-gradient(145deg,rgba(206,229,252,.97),rgba(172,206,244,.92));color:#1d5fae;border-color:#fff;box-shadow:0 0 0 2.5px rgba(123,168,240,.4),0 6px 18px rgba(90,140,210,.25),0 0 22px rgba(150,190,255,.6);}
         .icon-btn.active{color:#1d5fae;border-color:rgba(150,190,255,.9);background:linear-gradient(145deg,rgba(214,234,254,.98),rgba(184,214,248,.9));box-shadow:0 0 0 2px rgba(123,168,240,.35),0 0 16px rgba(150,190,255,.55);}
+        /* ===== 网页全屏右侧功能 dock：信息显示时偏小，眼睛隐藏信息后整体放大 ===== */
+        .fs-dock{position:absolute;right:12px;top:38%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;pointer-events:auto;transition:top .54s var(--e-settle),gap .45s var(--e-settle);}
+        .fs-ctrl-layer .fs-dock .fs-ctrl{position:relative;inset:auto;width:40px;height:40px;margin:0;font-size:18px;line-height:1;transition:opacity .42s var(--e-expo),transform .54s var(--e-settle),width .45s var(--e-settle),height .45s var(--e-settle),background .25s ease,color .25s ease;}
+        .fs-ctrl-layer .fs-dock .fs-ctrl svg{transition:width .45s var(--e-settle),height .45s var(--e-settle);}
+        .fs-ctrl-layer.fs-info-off .fs-dock{top:50%;gap:13px;}
+        .fs-ctrl-layer.fs-info-off .fs-dock .fs-ctrl{width:50px;height:50px;font-size:23px;}
+        .fs-ctrl{font-size:20px;line-height:1;}
+        /* 横竖屏：按键旋转与模型容器/信息卡共用同一时长与缓动，保持同步 */
+        .fs-ctrl-layer.fs-ls .fs-ctrl{transition:opacity .42s var(--e-expo),transform .54s var(--e-settle),background .25s ease,color .25s ease,left .54s var(--e-settle),right .54s var(--e-settle),top .54s var(--e-settle),bottom .54s var(--e-settle);}
 
         /* ===== 整页全屏：flex 布局，模型自适应占满 ===== */
         .full-wrap.fs-page{
@@ -420,10 +428,10 @@
             max-height:60vh;overflow:hidden;
             padding:8px 11px 10px;border-radius:18px;
             display:grid;grid-template-columns:1fr 1fr;gap:5px 9px;
-            transition:opacity .4s ease, max-height .48s var(--e-settle),
-                     padding .48s var(--e-settle),
+            transition:opacity .4s ease, max-height .48s cubic-bezier(.22,1,.36,1),
+                     padding .48s cubic-bezier(.22,1,.36,1),
                      border-width .48s ease, margin .48s ease;
-            animation:fsCardIn .56s var(--e-settle) .12s backwards;
+            animation:fsCardIn .56s cubic-bezier(.22,1,.36,1) .12s backwards;
         }
         .full-wrap.fs-page .info-card h3{
             grid-column:1/-1;font-size:12px;margin-bottom:0;padding-bottom:4px;
@@ -443,7 +451,7 @@
             position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;pointer-events:none;
             background:radial-gradient(circle,rgba(255,255,255,.78) 0%,rgba(180,204,242,.32) 46%,transparent 70%);
             transform:translate(-50%,-50%) scale(0);
-            animation:cellRipple .7s var(--e-settle) forwards;
+            animation:cellRipple .7s cubic-bezier(.22,1,.36,1) forwards;
         }
         /* 点击：外圈较大光晕，雾蓝带一点暖白，柔和不刺眼 */
         .info-card .row.lit{
@@ -492,12 +500,12 @@
             width:min(320px,64vw);max-height:58vh;overflow:hidden;margin-top:0;padding:10px 12px 8px;gap:5px;
             display:flex;flex-direction:column;border-radius:18px;
             background:
-                var(--glass-noise),
-                var(--glass-spec-soft),
-                rgba(248,251,253,.56);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(250,252,255,.58);
             border:1px solid rgba(255,255,255,.8);
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.85),-10px 16px 40px rgba(70,100,150,.09),0 0 22px rgba(255,255,255,.55);
-            backdrop-filter:blur(22px) saturate(180%)!important;-webkit-backdrop-filter:blur(22px) saturate(180%)!important;
+            box-shadow:var(--g-inner),-10px 16px 40px rgba(70,100,150,.09),0 0 22px rgba(255,255,255,.55);
+            backdrop-filter:blur(22px) saturate(180%) brightness(1.04)!important;-webkit-backdrop-filter:blur(22px) saturate(180%) brightness(1.04)!important;
             -webkit-mask-image:linear-gradient(95deg,#000 0%,#000 55%,rgba(0,0,0,.62) 78%,transparent 100%),linear-gradient(#000 0,#000 calc(100% - 26px),transparent 100%);
             -webkit-mask-composite:source-in;mask-composite:intersect;
             mask-image:linear-gradient(95deg,#000 0%,#000 55%,rgba(0,0,0,.62) 78%,transparent 100%),linear-gradient(#000 0,#000 calc(100% - 26px),transparent 100%);
@@ -518,16 +526,14 @@
         .full-wrap.model-backdrop .info-card .v{font-size:12px;font-weight:600;text-shadow:none;}
         .full-wrap.model-backdrop .model-container{background:transparent;}
         .full-wrap.model-backdrop.info-collapsed .info-card{opacity:0 !important;pointer-events:none;}
-        body.in-fs .full-wrap.model-backdrop .info-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        body.in-fs .full-wrap.model-backdrop .info-card{backdrop-filter:blur(18px) saturate(170%)!important;-webkit-backdrop-filter:blur(18px) saturate(170%)!important;}
         body.in-fs .header,body.in-fs .footer{opacity:0;pointer-events:none;}
-        /* 全屏/小窗期间底层页面保持原样且不可滚动，退出时才能精确落回原位，不跳变 */
-        body.in-fs, body.in-mini{overflow:hidden;}
-        /* 全屏背景不透明且动画期间逐帧重算模糊很贵：关闭 backdrop-filter 保证流畅，
-           但保留噪点微粒+斜向高光材质层，质感不丢 */
+        /* 全屏背景不透明，毛玻璃模糊无视觉作用且逐帧重算很贵，整段关闭以保证动画流畅；
+           但保留顶部柔泽与磨砂微粒，材质观感不丢 */
         body.in-fs .model-container,
         body.in-fs .info-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
-        body.in-fs .model-container{background:var(--glass-noise),var(--glass-spec-soft),rgba(244,248,251,.5);}
-        body.in-fs .info-card{background:var(--glass-noise),var(--glass-spec-soft),rgba(247,250,253,.62);}
+        body.in-fs .model-container{background:var(--g-grain),var(--g-sheen),rgba(244,248,251,.5);}
+        body.in-fs .info-card{background:var(--g-grain),var(--g-sheen),rgba(247,250,253,.62);}
         /* 进/出全屏过渡只走 transform，提升为合成层，避免重排重绘卡顿 */
         .full-wrap.fs-anim, .model-container.fs-anim{will-change:transform;}
 
@@ -537,10 +543,11 @@
         .info-tools{display:flex;gap:8px;}
         .icon-btn{width:32px;height:32px;border-radius:10px;border:1px solid rgba(255,255,255,.85);
             background:
-                var(--glass-noise),
-                linear-gradient(135deg,rgba(255,255,255,.78),rgba(255,255,255,.34) 48%,rgba(255,255,255,.56));
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(255,255,255,.42);
             color:#5b86c0;display:grid;place-items:center;cursor:pointer;
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 12px rgba(60,110,190,.1),0 0 10px rgba(150,190,255,.18);
+            box-shadow:var(--g-inner),0 4px 12px rgba(60,110,190,.1),0 0 10px rgba(150,190,255,.18);
             transition:box-shadow .28s ease,border-color .28s ease,background .28s ease,transform .15s ease;}
         .icon-btn:hover{border-color:rgba(158,188,228,.7);background:rgba(255,255,255,.75);
             box-shadow:0 0 12px rgba(145,178,230,.28),inset 0 0 8px rgba(190,210,240,.18);}
@@ -548,22 +555,22 @@
 
         /* ===== 管理员密码弹窗 ===== */
         .modal-mask{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;
-            background:rgba(40,70,130,.28);backdrop-filter:blur(14px) saturate(180%);-webkit-backdrop-filter:blur(14px) saturate(180%);
+            background:rgba(40,70,130,.28);backdrop-filter:blur(14px) saturate(180%) brightness(1.02);-webkit-backdrop-filter:blur(14px) saturate(180%) brightness(1.02);
             opacity:0;pointer-events:none;transition:opacity .32s ease;padding:24px;}
         .modal-mask.show{opacity:1;pointer-events:auto;}
         .modal-card{position:relative;width:100%;max-width:340px;
             background:
-                var(--glass-noise),
-                var(--glass-spec-soft),
-                rgba(240,246,254,.86);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(244,249,255,.8);
             border:1px solid transparent;
-            backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
             border-radius:22px;padding:24px 22px 20px;
-            box-shadow:var(--glass-inner),0 24px 70px rgba(40,80,150,.32);
-            transform:translateY(18px) scale(.96);transition:transform .38s var(--e-settle);}
+            box-shadow:var(--g-inner),0 24px 70px rgba(40,80,150,.32);
+            transform:translateY(18px) scale(.96);transition:transform .38s cubic-bezier(.22,1,.36,1);}
         .modal-card::before{
-            content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--glass-edge);
+            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+            padding:1px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
@@ -594,17 +601,17 @@
         .admin-bar{position:fixed;left:50%;bottom:18px;transform:translate(-50%,140%);z-index:9520;
             display:flex;gap:8px;max-width:calc(100vw - 24px);padding:10px;border-radius:18px;
             background:
-                var(--glass-noise),
-                var(--glass-spec-soft),
-                rgba(240,246,254,.82);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(244,249,255,.78);
             border:1px solid transparent;
-            backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
-            box-shadow:var(--glass-inner),0 18px 50px rgba(40,80,150,.3);opacity:0;pointer-events:none;
-            transition:transform .42s var(--e-settle),opacity .3s ease;}
+            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
+            box-shadow:var(--g-inner),0 18px 50px rgba(40,80,150,.3);opacity:0;pointer-events:none;
+            transition:transform .42s cubic-bezier(.22,1,.36,1),opacity .3s ease;}
         .admin-bar.show{transform:translate(-50%,0);opacity:1;pointer-events:auto;}
         .admin-bar::before{
-            content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--glass-edge);
+            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+            padding:1px;background:var(--g-edge);
             -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
             mask-composite:exclude;
@@ -633,14 +640,21 @@
         .mini-edge-tab{position:fixed;right:7px;top:50%;z-index:9055;width:26px;height:98px;touch-action:none;cursor:pointer;
             display:grid;place-items:center;color:#4a7fd6;border-radius:15px;
             background:
-                var(--glass-noise),
-                var(--glass-spec),
-                linear-gradient(160deg,rgba(255,255,255,.94),rgba(214,232,252,.84));
-            backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+                var(--g-grain),
+                var(--g-sheen),
+                rgba(248,251,255,.6);
+            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
             border:1px solid transparent;
-            box-shadow:var(--glass-inner),0 8px 24px rgba(50,100,180,.32),0 0 18px rgba(150,190,255,.55);
-            transform:translateY(-50%);transition:top .32s var(--e-settle),opacity .3s ease,transform .3s ease;
+            box-shadow:var(--g-inner),0 8px 24px rgba(50,100,180,.32),0 0 18px rgba(150,190,255,.55);
+            transform:translateY(-50%);transition:top .32s cubic-bezier(.22,1,.36,1),opacity .3s ease,transform .3s ease;
             animation:tabIn .5s cubic-bezier(.32,.72,0,1) .1s backwards;}
+        .mini-edge-tab::before{
+            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+            padding:1px;background:var(--g-edge);
+            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+            mask-composite:exclude;
+        }
         @keyframes tabIn{from{opacity:0;transform:translateX(40px) translateY(-50%);}to{opacity:1;transform:translateX(0) translateY(-50%);}}
         .mini-edge-tab:active{transform:translateY(-50%) scale(.9);}
         .mini-edge-tab.out{opacity:0;transform:translateX(46px) translateY(-50%);}
@@ -649,14 +663,15 @@
         .shot-imgwrap{margin:6px 0 14px;border-radius:14px;overflow:hidden;background:#fff;
             border:1px solid rgba(150,190,255,.3);box-shadow:0 8px 26px rgba(50,100,180,.18),0 0 18px rgba(150,190,255,.2);}
         .shot-imgwrap img{display:block;width:100%;height:auto;background:linear-gradient(160deg,#f2f7ff,#e7f0fb);
-            animation:softIn .55s var(--e-settle) .12s backwards;}
+            animation:softIn .55s cubic-bezier(.22,1,.36,1) .12s backwards;}
         .mini-hint{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:9045;
             background:
-                var(--glass-noise),
-                linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.03) 46%,rgba(255,255,255,.09));
-            backdrop-filter:blur(24px) saturate(170%);-webkit-backdrop-filter:blur(24px) saturate(170%);
+                var(--g-grain),
+                linear-gradient(180deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.04) 26%,rgba(255,255,255,0) 60%,rgba(255,255,255,.07) 100%),
+                rgba(34,62,108,.62);
+            backdrop-filter:blur(24px) saturate(170%) brightness(1.06);-webkit-backdrop-filter:blur(24px) saturate(170%) brightness(1.06);
             color:#fff;font-size:13px;padding:9px 18px;border-radius:30px;
-            box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 10px 30px rgba(20,45,90,.35);
+            box-shadow:inset 0 1px 1px rgba(255,255,255,.28),inset 0 -1px 1px rgba(255,255,255,.08),0 10px 30px rgba(20,45,90,.35);
             opacity:0;pointer-events:none;transition:opacity .4s ease;white-space:nowrap;}
         .mini-hint.show{opacity:1;}
         body.in-mini .header,body.in-mini .footer{opacity:0;pointer-events:none;}
@@ -666,7 +681,7 @@
         .glow-press>svg,.glow-press>span{position:relative;z-index:2;}
         .glow-press .gp-ripple{position:absolute;border-radius:50%;pointer-events:none;z-index:1;
             background:radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(170,200,245,.55) 42%,rgba(170,200,245,0) 72%);
-            transform:translate(-50%,-50%) scale(0);animation:gpWave .6s var(--e-settle) forwards;}
+            transform:translate(-50%,-50%) scale(0);animation:gpWave .6s cubic-bezier(.22,1,.36,1) forwards;}
         @keyframes gpWave{0%{opacity:.9;transform:translate(-50%,-50%) scale(0);}100%{opacity:0;transform:translate(-50%,-50%) scale(1);}}
         /* 微信浮窗引导 */
         .fg-mock{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(120,160,225,.3);background:#fff;box-shadow:0 8px 22px rgba(60,110,190,.12);}
@@ -680,19 +695,17 @@
         .fg-step{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;color:#3d4a5e;line-height:1.5;}
         .fg-step .n{flex:none;width:19px;height:19px;border-radius:50%;background:linear-gradient(135deg,#5b93e6,#4a7fd6);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;margin-top:1px;}
         .fg-note{margin-top:10px;font-size:11.5px;line-height:1.55;color:#7a93b8;}
-        /* ===== 柔和淡入（iOS / 澎湃 / ColorOS 手感）=====
-           去掉 filter:blur 与 scale：blur 逐帧重算很贵会掉帧（看着像闪一下），
-           scale 起跳是“弹出来”的来源；只留透明度 + 轻微上移，匀速减速，最稳 */
-        @keyframes softIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
-        .modal-mask.show .modal-title{animation:softIn .5s var(--e-settle) .06s backwards;}
-        .modal-mask.show .modal-sub{animation:softIn .5s var(--e-settle) .11s backwards;}
-        .modal-mask.show .modal-input{animation:softIn .5s var(--e-settle) .16s backwards;}
-        .modal-mask.show .fg-mock{animation:softIn .55s var(--e-settle) .18s backwards;}
-        .modal-mask.show .fg-note{animation:softIn .5s var(--e-settle) .27s backwards;}
-        .modal-mask.show .modal-btns{animation:softIn .5s var(--e-settle) .3s backwards;}
+        /* ===== 柔和散入/飞入（iOS / 澎湃 / ColorOS 手感） ===== */
+        @keyframes softIn{from{opacity:0;transform:translateY(16px) scale(.97);filter:blur(8px);}to{opacity:1;transform:none;filter:blur(0);}}
+        .modal-mask.show .modal-title{animation:softIn .5s cubic-bezier(.22,1,.36,1) .06s backwards;}
+        .modal-mask.show .modal-sub{animation:softIn .5s cubic-bezier(.22,1,.36,1) .11s backwards;}
+        .modal-mask.show .modal-input{animation:softIn .5s cubic-bezier(.22,1,.36,1) .16s backwards;}
+        .modal-mask.show .fg-mock{animation:softIn .55s cubic-bezier(.22,1,.36,1) .18s backwards;}
+        .modal-mask.show .fg-note{animation:softIn .5s cubic-bezier(.22,1,.36,1) .27s backwards;}
+        .modal-mask.show .modal-btns{animation:softIn .5s cubic-bezier(.22,1,.36,1) .3s backwards;}
         .toast{transition:opacity .32s ease,transform .46s cubic-bezier(.32,.72,0,1);}
-        .model-list.show .drag-handle{animation:softIn .5s var(--e-settle) .03s backwards;}
-        .model-list.show .ml-title{animation:softIn .5s var(--e-settle) .07s backwards;}
+        .model-list.show .drag-handle{animation:softIn .5s cubic-bezier(.22,1,.36,1) .03s backwards;}
+        .model-list.show .ml-title{animation:softIn .5s cubic-bezier(.22,1,.36,1) .07s backwards;}
         .admin-bar.show{animation:barIn .5s cubic-bezier(.32,.72,0,1) both;}
         @keyframes barIn{from{opacity:0;transform:translate(-50%,26px);}to{opacity:1;transform:translate(-50%,0);}}
         /* 小窗右下角自由缩放手柄 */
@@ -978,44 +991,10 @@ tipBanner.onclick = () => { tipBanner.classList.remove('show'); clearTimeout(tip
    对齐 OPPO/vivo 系统面板的手感；杜绝 spring 过冲带来的“弹一下”卡通感 */
 const EASE = 'cubic-bezier(.22,.61,.36,1)';        /* 柔和减速：进入淡入，对标 iOS */
 const EASE_IN = 'cubic-bezier(.4,.04,.6,1)';    /* 柔和加速：退出淡出 */
-const EASE_MOVE = 'cubic-bezier(.32,.8,.24,1)';    /* 位移主曲线：平滑展开/收拢，只减速不回弹 */
-const FS_IN_MS = 480;
-const FS_OUT_MS = 440;
-/* ===== 进/出全屏的动画基元（iOS / MIUI / ColorOS 的 zoom 思路）=====
-   1) 只做等比 scale：非等比会把文字和模型瞬间拉扁，就是“挤压感”的根源；
-   2) 缩放原点钉在源卡片中心：视觉上像从那张卡片“长出来 / 收回去”；
-   3) 主体全程保持可见，绝不经过全透明：这是“打开/退出不闪一下”的关键；
-   4) 满屏层脱流期间在源位置留同高占位：页面不塌陷、不空一块 */
-/* 缩放原点：钉在源卡片中心，视觉上像从那张卡片“长出来 / 收回去” */
-function flipOrigin(rect){
-    const cx = Math.max(0, Math.min(window.innerWidth, rect.left + rect.width/2));
-    const cy = Math.max(0, Math.min(window.innerHeight, rect.top + rect.height/2));
-    return cx.toFixed(1) + 'px ' + cy.toFixed(1) + 'px';
-}
-/* 缩放幅度：只用很小的等比比例。
-   卡片到满屏宽高差很大，若真按卡片尺寸缩放必须非等比，会把文字和模型瞬间拉扁 = 挤压感；
-   若大幅等比缩放，落位那一帧还会剩几十个百分点的尺寸跳动 = 闪一下。
-   所以这里保留 4% 上下的等比呼吸感，形状变化交给交叉淡化承接，观感最顺 */
-function flipScale(rect){
-    return (rect.height / Math.max(1, rect.width) > 1.4 ? .97 : .96).toFixed(3);
-}
-function makePlaceholder(rect){
-    const ph = document.createElement('div');
-    ph.style.cssText = 'height:' + Math.round(rect.height) + 'px;border-radius:26px;' +
-        'background:rgba(242,247,251,.5);border:1px solid rgba(255,255,255,.85);';
-    return ph;
-}
-let fsPh = null;   /* 当前占位骨架，同一时刻只保留一个 */
-function mountPlaceholder(el, rect){
-    if(fsPh){ try{ fsPh.remove(); }catch(e){} }
-    fsPh = makePlaceholder(rect);
-    try{ el.parentNode.insertBefore(fsPh, el); }catch(e){}
-}
-function unmountPlaceholder(){
-    if(fsPh){ try{ fsPh.remove(); }catch(e){} fsPh = null; }
-}
+const FS_IN_MS = 520;
 const FLY_MS = 380;
 const EASE_FLY = 'cubic-bezier(.4,0,.72,.45)';
+const ORI_MS = 540, ORI_EASE = 'cubic-bezier(.32,.72,0,1)';   /* 横竖屏旋转：模型容器/信息卡/按键共用同一时长与缓动，保持同步 */
 let fsState = null;
 let fsPushed = false;   // 是否已为全屏压入历史（让手机返回键先退出全屏，而不是关闭网页）
 let pendingFs = null;   // 两种全屏之间切换时的目标模式
@@ -1026,8 +1005,13 @@ const ICON_EYE = '<svg class="ic-eye" width="21" height="21" viewBox="0 0 24 24"
 const ICON_EYE_OFF = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 5.4C2.9 7 2.6 9.6 2.6 12.2c2.1 4.3 5.4 6.6 9.4 6.6 1.9 0 3.6-.6 5.1-1.5"/><path d="M10.4 6.1c.5-.1 1-.2 1.6-.2 4 0 7.3 2.3 9.4 6.6-.7 1.5-1.7 2.8-2.9 3.8"/><path d="M9.9 10.2a3.1 3.1 0 0 0 4.1 4.1"/><line x1="3.4" y1="3.6" x2="20.6" y2="20.4"/></svg>';
 const ICON_EXPAND = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
 const ICON_PAN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><path d="M8 7l4-4 4 4M7 8l-4 4 4 4M17 8l4 4-4 4M8 17l4 4 4-4"/></svg>';
+const ICON_AUTO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 3.8v4h-4"/></svg>';
+const ICON_RESET = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/><path d="M12 2.8v2.8M12 18.4v2.8M2.8 12h2.8M18.4 12h2.8"/></svg>';
+const ICON_SWITCH = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13M14 4l3 3-3 3"/><path d="M20 17H7M10 14l-3 3 3 3"/></svg>';
 
 function safeResize(){ try{ if(typeof viewer.resize === "function") viewer.resize(); else window.dispatchEvent(new Event("fs-nudge")); }catch(e){} }
+/* 全屏图标直接复用主页按钮字形，改主页即同步，无需重新认图标 */
+function homeIcon(id){ const h=document.getElementById(id); return h ? h.textContent.trim() : ''; }
 function enterFullscreen(type, isSwitch, reuse){
     if(fsState){
         /* 已经在全屏里：可点即响应，先收场再展开另一种全屏 */
@@ -1045,6 +1029,7 @@ function enterFullscreen(type, isSwitch, reuse){
         willChange: el.style.willChange, wrapZ: fullWrap.style.zIndex
     };
 
+    const homeGhost = (!isSwitch && !reuse) ? captureGhost(fullWrap) : null;
     fullWrap.style.zIndex = '9001';
 
     let bg, ctrl;
@@ -1055,7 +1040,7 @@ function enterFullscreen(type, isSwitch, reuse){
         ctrl = document.createElement("div");
         ctrl.className = "fs-ctrl-layer"; document.body.appendChild(ctrl);
     }
-    try{ ctrl.classList.remove('fs-ls'); }catch(e){}
+    try{ ctrl.classList.remove('fs-ls','fs-info-off'); }catch(e){}
     function makeBtn(cls, html, onclick){
         const b = document.createElement('div');
         b.className = 'fs-ctrl ' + cls;
@@ -1070,8 +1055,8 @@ function enterFullscreen(type, isSwitch, reuse){
         fullWrap.classList.remove('ls-card');
         modelContainer.style.transform = 'none';
         makeBtn('fs-rotate', ICON_ROTATE, toggleLandscape);
-        makeBtn('fs-pagebtn', ICON_EXPAND, () => switchFullscreen('page'));
-        const panBtn = makeBtn('fs-panbtn', ICON_PAN, () => setPanMode(!panMode));
+        makeBtn('fs-pagebtn', homeIcon('btnFull'), () => switchFullscreen('page'));
+        const panBtn = makeBtn('fs-panbtn', homeIcon('btnPan'), () => setPanMode(!panMode));
         panBtn.classList.toggle('active', panMode);
         const mEye = makeBtn('fs-eye', ICON_EYE+'<i class="eye-badge"></i>', () => {
             const c = fullWrap.classList.toggle('info-collapsed');
@@ -1083,7 +1068,7 @@ function enterFullscreen(type, isSwitch, reuse){
         setTimeout(()=>{ try{ ensureAbsRadius(); }catch(e){} }, 420);
     }
     if(type === 'page'){
-        makeBtn('fs-modelbtn', ICON_EXPAND, () => switchFullscreen('model'));
+        makeBtn('fs-modelbtn', homeIcon('btnModelFull'), () => switchFullscreen('model'));
         const eye=$('#btnEyeInline');
         const floatEye=makeBtn('fs-eye', ICON_EYE+'<i class="eye-badge"></i>', () => toggleInfoCollapse());
         function toggleInfoCollapse(){
@@ -1093,40 +1078,51 @@ function enterFullscreen(type, isSwitch, reuse){
             floatEye.classList.toggle('collapsed',collapsed);
             floatEye.classList.toggle('active',collapsed);
             floatEye.innerHTML=(collapsed?ICON_EYE_OFF:ICON_EYE)+'<i class="eye-badge"></i>';
+            ctrl.classList.toggle('fs-info-off', collapsed);
             setTimeout(safeResize,500);
         }
         eye.onclick=toggleInfoCollapse;
+        /* 右侧功能 dock：自动旋转 / 移动 / 定位复位 / 切换构件(传送) */
+        const dock=document.createElement('div'); dock.className='fs-dock'; ctrl.appendChild(dock);
+        function dockBtn(cls,html,fn){
+            const b=document.createElement('div');
+            b.className='fs-ctrl fs-dock-btn '+cls; b.innerHTML=html; b.onclick=fn;
+            if(typeof bindGlowPress==='function') bindGlowPress(b);
+            dock.appendChild(b); return b;
+        }
+        const autoB=dockBtn('fs-tool-auto fs-autobtn', homeIcon('btnRotate'), ()=>{
+            rotate=!rotate; viewer.autoRotate=rotate;
+            try{ btnRotate.classList.toggle('active',rotate); }catch(e){}
+            document.querySelectorAll('.fs-autobtn').forEach(x=>x.classList.toggle('active',rotate));
+        });
+        autoB.classList.toggle('active', !!rotate);
+        const panB=dockBtn('fs-tool-pan fs-panbtn', homeIcon('btnPan'), ()=>setPanMode(!panMode));
+        panB.classList.toggle('active', panMode);
+        dockBtn('fs-tool-reset', homeIcon('btnReset'), ()=>{ try{ btnReset.click(); }catch(e){ camPinned=false; viewer.cameraOrbit='0deg 75deg auto'; viewer.cameraTarget='0m 0m 0m'; viewer.jumpCameraToGoal(); setTimeout(ensureAbsRadius,320); } });
+        dockBtn('fs-tool-switch', homeIcon('btnSwitch'), ()=>{ try{ openModelList(); }catch(e){ try{ btnSwitch.click(); }catch(_){} } });
         fullWrap.classList.add('fs-page');
     }
 
     document.body.classList.add('in-fs');
     try{ viewer.setAttribute('interaction-prompt','none'); viewer.interactionPrompt='none'; }catch(e){}
+    try{ syncControls(); }catch(e){}
     fullWrap.classList.remove('ls-card');
     fullWrap.classList.remove('fs-exiting');
 
-    /* 最终布局一次性到位：fixed 铺满；非互切时在源位置插入同高度占位，底层不塌陷。
-       互切时两种全屏都被不透明遮罩盖住，不插占位，免得顶动满屏内部的 flex 布局 */
-    if(!isSwitch) mountPlaceholder(el, rect);
+    /* 最终布局一次性到位：fixed 铺满 */
     el.style.position = "fixed";
     el.style.left = "0px"; el.style.top = "0px";
     el.style.width = "100vw"; el.style.height = "100vh";
     el.style.zIndex = "9002";
+    el.style.transformOrigin = "center center";
     el.style.willChange = "opacity, transform";
     if(type === "model") el.style.borderRadius = "26px";
 
-    /* 进入：iOS 式 zoom —— 首帧以源卡片中心为原点等比缩小贴回原位且全程可见，
-       随后等比展开到满屏；opacity 不归零，不做非等比拉伸，杜绝"闪一下"与挤压感。
-       互切时两帧都是满屏，仅做极轻的位移+透明度交叉，遮罩常驻不闪白 */
+    /* 进入：普通=纯透明度柔和淡入；互切=新层从左下向右上轻移淡入；双 rAF 保证首帧 */
+    const fromTransform = isSwitch ? "scale(.99) translateY(6px)" : "scale(.985) translateY(8px)";
     el.style.transition = "none";
-    if(isSwitch){
-        el.style.transformOrigin = "center center";
-        el.style.opacity = ".55";
-        el.style.transform = "scale(.995) translateY(4px)";
-    } else {
-        el.style.transformOrigin = flipOrigin(rect);
-        el.style.opacity = "1";
-        el.style.transform = "scale(" + flipScale(rect) + ")";
-    }
+    el.style.opacity = isSwitch ? ".22" : "0";
+    el.style.transform = fromTransform;
     if(!reuse){ bg.style.transition = "none"; bg.style.opacity = "0"; }
     else { bg.style.transition = "none"; bg.style.opacity = "1"; }
 
@@ -1138,13 +1134,15 @@ function enterFullscreen(type, isSwitch, reuse){
         if(el.style.transform && el.style.transform.indexOf('rotate') >= 0){
             el.style.opacity = "1";
             if(!reuse){ bg.style.transition = "opacity 460ms " + EASE; bg.style.opacity = "1"; }
+            fadeGhostOut(homeGhost, {dur:400, to:'scale(1.016) translateY(-3px)'});
             return;
         }
         const dur = isSwitch ? 460 : FS_IN_MS;
-        el.style.transition = "opacity " + dur + "ms " + EASE + ", transform " + dur + "ms " + EASE_MOVE;
-        el.style.transform = "scale(1)";
+        el.style.transition = "opacity " + dur + "ms " + EASE + ", transform " + dur + "ms " + EASE;
+        el.style.transform = "scale(1) translateY(0)";
         el.style.opacity = "1";
         if(!reuse){ bg.style.transition = "opacity 460ms " + EASE; bg.style.opacity = "1"; }
+        fadeGhostOut(homeGhost, {dur:400, to:'scale(1.016) translateY(-3px)'});
         setTimeout(safeResize, 80);
     }));
     setTimeout(()=>{ ctrl.querySelectorAll(".fs-ctrl").forEach(b=>b.classList.add("show")); }, 200);
@@ -1158,6 +1156,38 @@ function requestExitFullscreen(){
 window.addEventListener('popstate', () => {
     if(fsState){ fsPushed = false; exitFullscreen(); }
 });
+/* 克隆当前画面为静态快照（模型用 toDataURL 截图替换，绝不新建第二个 WebGL 上下文），
+   让真实结构可立即复位/重建，快照在最上层交叉淡出，从根上消除单元素搬移造成的白闪/跳变 */
+function captureGhost(src){
+    try{
+        let shot=''; try{ shot = viewer.toDataURL('image/webp',0.82) || ''; }catch(e){}
+        const g = src.cloneNode(true);
+        g.removeAttribute('id'); g.classList.add('fs-ghost');
+        g.querySelectorAll('model-viewer').forEach(mv=>{
+            const img=document.createElement('img');
+            if(shot) img.src=shot;
+            img.style.cssText='width:100%;height:100%;object-fit:contain;display:block;border:0;';
+            mv.replaceWith(img);
+        });
+        g.querySelectorAll('.toolbar,#loading,.tip-banner,.progress,.fs-dock,.fs-ctrl-layer').forEach(n=>n.remove());
+        const r=src.getBoundingClientRect();
+        g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;';
+        document.body.appendChild(g);
+        return g;
+    }catch(e){ return null; }
+}
+function fadeGhostOut(g, opts){
+    if(!g) return;
+    opts = opts || {};
+    const dur = opts.dur || 420;
+    g.style.transition='none'; g.style.opacity='1'; g.style.transformOrigin='center center'; g.style.transform=opts.from||'none';
+    void g.offsetHeight;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        g.style.transition='opacity '+dur+'ms '+EASE_IN+',transform '+dur+'ms '+EASE_IN;
+        g.style.opacity='0'; g.style.transform=opts.to||'scale(1.012)';
+    }));
+    setTimeout(()=>{ if(g.parentNode) g.remove(); }, dur+120);
+}
 function exitFullscreen(){
     const state = fsState;
     const { el, type, saved, bg, ctrl, rect } = state;
@@ -1169,72 +1199,46 @@ function exitFullscreen(){
 
     ctrl.querySelectorAll('.fs-ctrl').forEach(b=>{ b.style.transitionDelay='0ms'; b.classList.remove('show'); });
 
-    let landed = false;
-    const land = () => {
-        if(landed) return; landed = true;
-        if(state.isLandscape){ fsState.isLandscape=false; el.style.transformOrigin="0 0"; el.style.transform="none"; }
-        if(switching){
-            /* 互切：保留遮罩和按钮容器，不露出普通页，杜绝闪白 */
-            restoreLayout(el, state, bg, ctrl, true);
-            safeResize();
-            void el.offsetHeight;
-            enterFullscreen(switching, true, {bg, ctrl});
-        } else {
-            restoreLayout(el, state, bg, ctrl);
-            safeResize();
-            void el.offsetHeight;
-            fadeInInfoCard();
-        }
-    };
     if(switching){
-        /* 互切：旧层轻移淡出，新层紧接着展开；遮罩全程不透明，杜绝闪白 */
-        el.style.transition = "opacity 300ms " + EASE_IN;
-        el.style.opacity = "0";
-        const icS = document.getElementById("infoCard");
-        if(icS){ icS.style.transition = "opacity 280ms " + EASE_IN; icS.style.opacity = "0"; }
-        setTimeout(land, 300);
-    } else {
-        /* 退出：满屏层以源卡片中心为原点等比收拢，同时后半程柔和淡出；
-           落位帧上卡片本体再短促淡回 —— 一淡出一淡入形成连续交叉溶解，
-           全程没有"全空白帧"，也没有大尺寸瞬间跳到小尺寸的闪感；主体是等比缩放，无挤压 */
-        const ic = document.getElementById("infoCard");
-        if(ic){ ic.style.transition = "opacity 200ms " + EASE_IN; ic.style.opacity = "0"; }
+        /* 互切：冻结旧全屏快照，真实结构立即复位并重建新全屏，新画面在快照下淡入、快照同时淡出（交叉淡化，无白闪） */
+        const ghost = captureGhost(el);
+        restoreLayout(el, state, bg, ctrl, true);
+        safeResize();
         void el.offsetHeight;
-        requestAnimationFrame(() => {
-            el.style.transition = "transform " + FS_OUT_MS + "ms " + EASE_MOVE + ", opacity " + FS_OUT_MS + "ms " + EASE_IN + ", border-radius " + FS_OUT_MS + "ms " + EASE_MOVE;
-            el.style.transformOrigin = flipOrigin(rect);
-            el.style.transform = "scale(" + flipScale(rect) + ")";
-            el.style.opacity = "0";
-            bg.style.transition = "opacity " + FS_OUT_MS + "ms " + EASE_MOVE;
-            bg.style.opacity = "0";
-        });
-        setTimeout(land, FS_OUT_MS);
+        enterFullscreen(switching, true, {bg, ctrl});
+        fadeGhostOut(ghost, {dur:440, to:'scale(.99) translateY(4px)'});
+    } else {
+        /* 退出：冻结全屏快照，真实结构立即回到主页；主页轻微上浮淡入，快照同步柔和淡出并轻微下沉，像系统回退 */
+        const ghost = captureGhost(el);
+        restoreLayout(el, state, bg, ctrl);
+        safeResize();
+        void el.offsetHeight;
+        fullWrap.style.transition='none'; fullWrap.style.opacity='0'; fullWrap.style.transform='translateY(10px)';
+        void fullWrap.offsetHeight;
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{
+            fullWrap.style.transition='opacity .5s '+EASE+',transform .5s '+EASE;
+            fullWrap.style.opacity='1'; fullWrap.style.transform='translateY(0)';
+        }));
+        fadeGhostOut(ghost, {dur:520, to:'scale(.985) translateY(8px)'});
+        setTimeout(()=>{ fullWrap.style.transition=''; fullWrap.style.opacity=''; fullWrap.style.transform=''; try{ safeResize(); }catch(e){} }, 700);
     }
 }
-/* 落位后把卡片本体柔和淡回（主体位置已正确，短溶解承接退出淡出，杜绝闪一下） */
-function fadeInInfoCard(){
-    const ic = document.getElementById("infoCard");
-    if(ic){
-        ic.style.transition = "none";
-        ic.style.opacity = "0";
-        void ic.offsetHeight;
-        requestAnimationFrame(() => {
-            ic.style.transition = "opacity 300ms " + EASE;
-            ic.style.opacity = "1";
-        });
-        setTimeout(()=>{ ic.style.transition = ''; ic.style.opacity = ''; }, 380);
-    }
+/* 主页“从左下角铺开淡入”：WAAPI，结束即取消，避免 transform 残留成为 fixed 包含块 */
+function playHomeIn(){
     try{
-        document.getElementById("fullWrap").animate(
-            [{opacity:.4},{opacity:1}],
-            {duration:240, easing:"cubic-bezier(.3,.35,.25,1)"}
+        fullWrap.style.opacity = '.35';
+        const a = fullWrap.animate(
+            [{opacity:.35, transform:"translateY(6px)"},{opacity:1, transform:"translateY(0)"}],
+            {duration:420, easing:"cubic-bezier(.22,.61,.36,1)", fill:"both"}
         );
+        const clearHome = () => { try{ a.cancel(); }catch(e){} fullWrap.style.opacity=''; fullWrap.style.transform=''; };
+        a.onfinish = clearHome;
+        setTimeout(clearHome, 560);
     }catch(e){}
 }
 function restoreLayout(el, state, bg, ctrl, keepOverlay){
     const { saved } = state;
     el.style.transition = 'none';
-    unmountPlaceholder();
     el.style.transformOrigin = saved.transformOrigin;
     el.style.position = saved.position;
     el.style.left = saved.left; el.style.top = saved.top;
@@ -1252,8 +1256,9 @@ function restoreLayout(el, state, bg, ctrl, keepOverlay){
     if(!keepOverlay){ document.body.classList.remove("in-fs"); bg.remove(); ctrl.remove(); }
     try{ viewer.setAttribute('interaction-prompt','auto'); viewer.interactionPrompt='auto'; }catch(e){}
     fsState = null;
+    try{ syncControls(); }catch(e){}
     void el.offsetHeight;
-    if(!keepOverlay){ setTimeout(()=>{ try{ fullWrap.style.transform=''; }catch(e){} }, 80); }   /* 兜底：清掉进入动画残留 transform */
+    /* 退场交叉淡化结束后由 exitFullscreen 统一清理 fullWrap 内联样式，避免提前清掉导致跳变 */
 }
 /* 全屏模式之间互切：整页 ⇄ 模型，收场即开场，一段连贯动作 */
 function switchFullscreen(type){
@@ -1275,13 +1280,22 @@ function applyOrientation(){
     const el = fsState.el;
     if(fsState.ctrl) fsState.ctrl.classList.toggle('fs-ls', css);
     fullWrap.classList.toggle('ls-card', css);
-    el.style.transition = 'transform .52s ' + EASE_IN;
+    try{ syncControls(); }catch(e){}
+    el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
     el.style.transformOrigin = 'center center';
-    el.style.transform = css ? ('rotate(90deg) scale(' + (window.innerHeight/window.innerWidth) + ')') : 'none';
+    if(css){
+        el.style.left='50%'; el.style.top='50%';
+        el.style.width='100vh'; el.style.height='100vw';
+        el.style.transform='translate(-50%,-50%) rotate(90deg)';
+    } else {
+        el.style.left='0'; el.style.top='0';
+        el.style.width='100vw'; el.style.height='100vh';
+        el.style.transform='none';
+    }
     try{ resetGestureState(true); }catch(e){}
-    resetCameraView();
     showToast(want ? '横屏模式' : '竖屏模式');
-    setTimeout(safeResize, 560);
+    try{ safeResize(); }catch(e){}
+    setTimeout(function(){ resetCameraView(); setTimeout(safeResize, 80); }, 300);
 }
 function toggleLandscape(){
     if(!fsState || fsState.type !== 'model') return;
@@ -1294,7 +1308,7 @@ function resetLandscape(immediate){
     const el = fsState.el;
     el.style.transformOrigin = 'center center';
     if(immediate){ el.style.transition = 'none'; el.style.transform = 'none'; void el.offsetHeight; el.style.transition = ''; }
-    else { el.style.transition = 'transform .52s ' + EASE_IN; el.style.transform = 'none'; }
+    else { el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE; el.style.transform = 'none'; }
     try{ if(fsState.ctrl) fsState.ctrl.classList.remove('fs-ls'); }catch(e){}
     fullWrap.classList.remove('ls-card');
 }
@@ -1348,7 +1362,7 @@ function pinCameraAbsolute(){
 function ensureAbsRadius(){ if(camPinned) return true; camPinned = pinCameraAbsolute(); if(camPinned){ try{ viewer.jumpCameraToGoal(); }catch(e){} } return camPinned; }
 /* 复位视角并在取景稳定后钉半径（进入/横竖屏切换调用），轮询应对相机异步 */
 function resetCameraView(){
-    camPinned = false;
+    camPinned = false; panT = null;
     try{ viewer.cameraTarget='0m 0m 0m'; viewer.cameraOrbit='0deg 75deg auto'; viewer.jumpCameraToGoal(); }catch(e){}
     let tries = 0, lastR = -1, stable = 0;
     const t = setInterval(()=>{
@@ -1370,20 +1384,23 @@ function panScale(){
     const o = viewer.getCameraOrbit(), box = viewer.getBoundingClientRect();
     const r = Math.abs(o.radius);
     let fov = 30; try{ fov = viewer.getFieldOfView() || 30; }catch(e){}
-    const h = Math.max(1, box.height);
+    const h = Math.max(1, viewer.clientHeight || box.height);
     return 2 * r * Math.tan(0.5 * fov * DEG) / h;
 }
+let panT = null;   /* 本端权威平移目标：model-viewer 属性异步生效，同帧多指针事件回读会是旧值，
+                      故在 JS 内同步累加，复位/切模式时置空重新播种，保证双指平移不丢量 */
+function syncPanT(){ if(panT) return panT; const t=viewer.getCameraTarget(); panT={x:t.x,y:t.y,z:t.z}; return panT; }
 function applyPan(dx, dy){
     if(!ensureAbsRadius()) return;
     const o = viewer.getCameraOrbit(), s = panScale();
     const th = o.theta, ph = o.phi;
     const rx = Math.cos(th), rz = -Math.sin(th);
     const ux = -Math.cos(ph)*Math.sin(th), uy = Math.sin(ph), uz = -Math.cos(ph)*Math.cos(th);
-    const tg = viewer.getCameraTarget();
-    tg.x += (dx*rx + dy*ux) * s;
+    const tg = syncPanT();
+    tg.x += (-dx*rx + dy*ux) * s;
     tg.y += (dy*uy) * s;
-    tg.z += (dx*rz + dy*uz) * s;
-    viewer.cameraTarget = tg.toString();
+    tg.z += (-dx*rz + dy*uz) * s;
+    viewer.cameraTarget = tg.x.toFixed(3)+'m '+tg.y.toFixed(3)+'m '+tg.z.toFixed(3)+'m';
     viewer.jumpCameraToGoal();
 }
 const onUI = e => e.target && e.target.closest && e.target.closest('.btn,.icon-btn,.fs-ctrl,.ml-search,input,button');
@@ -1410,7 +1427,7 @@ function pgDown(e){
     e.preventDefault(); e.stopPropagation();     /* 接管，阻止原生单指旋转 */
     pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
     if(pts.size === 1){ pg = {kind:'pan', last:{x:e.clientX, y:e.clientY}}; ensureAbsRadius(); }
-    else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:framedR||radOf(viewer.getCameraOrbit())}; }
+    else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:radOf(viewer.getCameraOrbit()), m0:{x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2}}; }
 }
 function pgMove(e){
     if(fsState && fsState.cssRotated) return;
@@ -1421,6 +1438,9 @@ function pgMove(e){
     if(!pg) return;
     const a = [...pts.values()];
     if(pg.kind === 'pinch' && pts.size >= 2){
+        const m = {x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2};
+        if(pg.m0) applyPan(m.x-pg.m0.x, m.y-pg.m0.y);
+        pg.m0 = m;
         const d = Math.max(1, Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y));
         const o = viewer.getCameraOrbit(); writeOrbit(o.theta, o.phi, clampRad(pg.r0*pg.d0/d));
         return;
@@ -1432,7 +1452,7 @@ function pgMove(e){
 function pgUp(e){
     if(pts.has(e.pointerId)) pts.delete(e.pointerId);
     if(pts.size === 1){ const p=[...pts.values()][0]; pg = {kind:'pan', last:{...p}}; }
-    else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:framedR||radOf(viewer.getCameraOrbit())}; }
+    else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:radOf(viewer.getCameraOrbit()), m0:{x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2}}; }
     else { pg = null; }
 }
 modelContainer.addEventListener('pointerdown', pgDown, {capture:true, passive:false});
@@ -1447,7 +1467,7 @@ let lsGesture = null;
 const LS_THETA_SIGN = -1, LS_PHI_SIGN = -1;
 function lsK(){ return window.innerHeight / Math.max(1, window.innerWidth); }
 /* 物理像素位移 -> 模型本地(未旋转)位移：rotate(90)scale(k) 的逆变换 */
-function lsLocal(dx, dy){ const k = lsK(); return {x:dy/k, y:-dx/k}; }
+function lsLocal(dx, dy){ return {x:dy, y:-dx}; }
 function lsDown(e){
     if(!(fsState && fsState.cssRotated)){ lsPts.clear(); lsGesture = null; return; }
     if(onUI(e)) return;
@@ -1457,7 +1477,7 @@ function lsDown(e){
     lsPts.set(e.pointerId, {x:e.clientX, y:e.clientY});
     const arr = [...lsPts.values()], o = viewer.getCameraOrbit();
     if(lsPts.size === 1){ lsGesture = {kind:panMode?'pan':'orbit', last:{x:e.clientX,y:e.clientY}, o}; }
-    else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o, r0:framedR||radOf(o)}; }
+    else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o, r0:radOf(o), m0:{x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2}}; }
 }
 function lsMove(e){
     if(!(fsState && fsState.cssRotated) || !lsPts.has(e.pointerId)) return;
@@ -1467,6 +1487,9 @@ function lsMove(e){
     if(!lsGesture) return;
     const arr = [...lsPts.values()];
     if(lsGesture.kind === 'pinch' && lsPts.size >= 2){
+        const m = {x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2};
+        if(lsGesture.m0){ const Lm=lsLocal(m.x-lsGesture.m0.x, m.y-lsGesture.m0.y); applyPan(Lm.x,Lm.y); }
+        lsGesture.m0 = m;
         const d = Math.max(1, Math.hypot(arr[0].x-arr[1].x, arr[0].y-arr[1].y));
         const o = viewer.getCameraOrbit(); writeOrbit(o.theta, o.phi, clampRad(lsGesture.r0*lsGesture.d0/d));
         return;
@@ -1476,7 +1499,7 @@ function lsMove(e){
     const o = viewer.getCameraOrbit();
     if(lsGesture.kind === 'orbit'){
         const g = 0.0062;
-        writeOrbit(o.theta + LS_THETA_SIGN*L.x*g, o.phi + LS_PHI_SIGN*L.y*g, framedR||radOf(o));
+        writeOrbit(o.theta + LS_THETA_SIGN*L.x*g, o.phi + LS_PHI_SIGN*L.y*g, radOf(o));
     }else if(lsGesture.kind === 'pan'){
         applyPan(L.x, L.y);
     }
@@ -1487,7 +1510,7 @@ function lsUp(e){
     const arr = [...lsPts.values()];
     if(!(fsState && fsState.cssRotated)){ lsGesture = null; return; }
     if(lsPts.size === 1){ lsGesture = {kind:panMode?'pan':'orbit', last:{...arr[0]}, o:viewer.getCameraOrbit()}; }
-    else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o:viewer.getCameraOrbit(), r0:framedR||radOf(viewer.getCameraOrbit())}; }
+    else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o:viewer.getCameraOrbit(), r0:radOf(viewer.getCameraOrbit()), m0:{x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2}}; }
     else { lsGesture = null; }
 }
 modelContainer.addEventListener('pointerdown', lsDown, {capture:true, passive:false});
@@ -1511,6 +1534,16 @@ const midUp = () => { midPan = null; };
 modelContainer.addEventListener('pointerup', midUp, true);
 modelContainer.addEventListener('pointercancel', midUp, true);
 modelContainer.addEventListener('mousedown', e => { if(e.button === 1) e.preventDefault(); });
+modelContainer.addEventListener('wheel', e => {
+    if(viewer.hasAttribute('camera-controls')) return;   /* 旋转模式：原生滚轮缩放 */
+    if(onUI(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    if(!ensureAbsRadius()) return;
+    const o = viewer.getCameraOrbit();
+    const mag = Math.min(1.2, Math.abs(e.deltaY) * 0.0016 || 0.001);
+    const f = Math.exp((e.deltaY > 0 ? 1 : -1) * mag);  /* 上滚放大、下滚缩小，与原生一致 */
+    writeOrbit(o.theta, o.phi, clampRad(radOf(o) * f));
+}, {capture:true, passive:false});
 
 function syncPanBtns(){ document.querySelectorAll('#btnPan,.fs-panbtn').forEach(b => b.classList.toggle('active', panMode)); }
 /* 统一清空手势瞬时状态（触点/锚点/中键），避免锁屏、切后台、反复进出全屏、横竖屏切换后残留旧触点导致坐标错乱 */
@@ -1521,12 +1554,26 @@ function resetGestureState(keepMode){
     try{ lsPts.clear(); }catch(e){}
     try{ syncPanBtns(); }catch(e){}
 }
+/* 统一原生/自绘控制器，保证手机触摸与电脑鼠标行为完全一致、绝不叠加：
+   强制横屏(CSS旋转)：原生关闭，平移/旋转/捏合全由 ls 自绘（坐标需逆变换）；
+   正常朝向：旋转模式交原生单指旋转；移动模式关闭原生，由 pg 自绘平移/捏合。 */
+function syncControls(){
+    const ls = !!(fsState && fsState.cssRotated);
+    const nativeOn = ls ? false : !panMode;
+    try{
+        if(nativeOn) viewer.setAttribute('camera-controls',''); else viewer.removeAttribute('camera-controls');
+        modelContainer.style.touchAction = 'none';
+        viewer.style.touchAction = 'none';
+    }catch(e){}
+}
 function setPanMode(on){
     panMode = !!on;
+    panT = null;
     try{ resetGestureState(true); }catch(e){}
     if(panMode) ensureAbsRadius();
+    syncControls();
     syncPanBtns();
-    showToast(on ? '移动模式：单指拖移 · 双指缩放' : '旋转模式：单指旋转 · 双指缩放');
+    showToast(on ? '移动模式：单指拖移 · 双指缩放（双指拖动可平移）' : '旋转模式：单指旋转 · 双指缩放');
 }
 btnPan.onclick = () => setPanMode(!panMode);
 /* 切后台/锁屏/页面隐藏时触摸常常收不到 pointerup，回前台丢弃残留触点（保留当前模式） */
@@ -1733,9 +1780,9 @@ function setupEdgeDrag(){
         const st=miniState; if(!st) return;
         window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',up);
         if(!moved){ exitMini(); return; }   // 点按=恢复
-        st.wrap.style.transition='transform .32s var(--e-settle)';
+        st.wrap.style.transition='transform .32s cubic-bezier(.22,1,.36,1)';
         st.wrap.style.transform='translate('+st.tx+'px,'+st.ty+'px) scale('+st.s+')';
-        st.tab.style.transition='top .32s var(--e-settle)'; positionMiniTab();
+        st.tab.style.transition='top .32s cubic-bezier(.22,1,.36,1)'; positionMiniTab();
     };
     const down=e=>{
         if(!miniState) return;
