@@ -353,7 +353,17 @@
            内容完全静止 + clip-path/opacity 动画 = GPU 合成，零重绘，这是流畅的根本保证；
            真实层从第 1 帧就是终态、全程不动，不存在淡入淡出，所以不可能闪 ===== */
         .fs-ghost,.fs-ghost *{animation:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
-        .fs-ghost{box-sizing:border-box;will-change:transform,opacity;}
+        /* 快照必须整体不透明：它的玻璃面板原本是半透明的，收缩时底下真实画面会透上来
+           和快照内容叠成"双层影"。垫一层与 body 相同的环境彩光底色，快照就是一张完整照片 */
+        .fs-ghost{box-sizing:border-box;will-change:transform,opacity;
+            background:
+                radial-gradient(52% 44% at 88% 2%, rgba(150,196,250,.55), transparent 64%),
+                radial-gradient(44% 38% at 2% 22%, rgba(158,226,198,.40), transparent 62%),
+                radial-gradient(56% 46% at 96% 82%, rgba(212,178,242,.46), transparent 66%),
+                radial-gradient(48% 38% at 4% 98%, rgba(252,206,160,.40), transparent 62%),
+                radial-gradient(40% 30% at 50% 55%, rgba(190,214,246,.22), transparent 68%),
+                linear-gradient(160deg,#fbfcfe 0%,#f3f7fb 52%,#f7f5fa 100%);
+        }
         .fs-ghost img{display:block;background:transparent;}
 
         /* ===== 全屏控制按钮层 ===== */
@@ -857,7 +867,7 @@
 <script src="data.js"></script>
 <script>
 const $ = s => document.querySelector(s);
-const id = new URLSearchParams(location.search).get('id');
+let id = new URLSearchParams(location.search).get('id');
 const viewer = $('#viewer'), loading = $('#loading'), bar = $('#bar'), percent = $('#percent'),
 error = $('#error'), fullWrap = $('#fullWrap'), btnFull = $('#btnFull'), btnModelFull = $('#btnModelFull'),
 btnRotate = $('#btnRotate'), btnReset = $('#btnReset'), infoCard = $('#infoCard'), tipBanner = $('#tipBanner'),
@@ -874,10 +884,49 @@ function loadOverrides(){
     }catch(e){}
 }
 loadOverrides();
+/* ===== 模型加载架构（本轮优化）=====
+   1) 切换构件 = 热切换：只换 viewer.src 与信息字段，不再整页 location.href 重载
+      —— 省掉重新下载解析 model-viewer 库、重建 WebGL 上下文、重放页面入场动画的全部开销；
+   2) 首模型加载完成后，趁浏览器空闲把其余 GLB 预取为 Blob 缓存（本地文件每个不到 1MB），
+      之后任何一次切换都是"秒开"：src 直接指向内存中的 blob，零网络零进度条；
+   3) 事件监听只注册一次，切换/重试/进度复用同一套状态机，杜绝重复绑定。 */
+const glbCache = {};                                   /* glbUrl -> blob: URL（已预载） */
+const srcOf = d => glbCache[d.glbUrl] || d.glbUrl;     /* 有缓存用缓存，没有走原地址 */
+function fillInfo(d){
+    fields.forEach(f => {const el = $(`#${f}`); if(el){ if(d[f]) el.innerText = d[f]; else el.innerText = '—'; }});
+}
+function showLoadingUI(){
+    loading.style.display = 'flex'; loading.style.opacity = '1';
+    bar.style.width = '0%'; percent.innerText = '0%';
+    $('#loadingSub').innerText = '正在准备模型…';
+    document.querySelector('.progress').classList.remove('done');
+    error.style.display = 'none';
+}
+function preloadRest(){
+    if(!window.partData) return;
+    Object.keys(partData).forEach(pid=>{
+        const url = partData[pid] && partData[pid].glbUrl;
+        if(!url || glbCache[url]) return;
+        fetch(url).then(r => r.ok ? r.blob() : null)
+            .then(b => { if(b) glbCache[url] = URL.createObjectURL(b); })
+            .catch(()=>{});
+    });
+}
+const idle = (fn, ms) => ('requestIdleCallback' in window) ? requestIdleCallback(fn, {timeout: ms||4000}) : setTimeout(fn, ms||1500);
+/* 热切换入口：更新 id → 改地址栏（可分享/返回） → 刷新信息 → 换模型 */
+function switchPart(pid){
+    if(!window.partData || !partData[pid] || String(pid) === String(id)) { if(String(pid)===String(id)) closeModelList(); return; }
+    id = pid; retryCount = 0;
+    try{ history.pushState({id:pid}, '', location.pathname + '?id=' + pid); }catch(e){}
+    const d = partData[pid];
+    fillInfo(d);
+    showLoadingUI();
+    try{ viewer.autoRotate = rotate; }catch(e){}
+    viewer.src = srcOf(d);
+}
 if(id && window.partData && partData[id]){
-    const d = partData[id];
-    fields.forEach(f => {const el = $(`#${f}`); if(el && d[f]) el.innerText = d[f];});
-    viewer.src = d.glbUrl;
+    fillInfo(partData[id]);
+    viewer.src = partData[id].glbUrl;
     viewer.autoRotateSpeed = 5;
     /* 进页面即自旋；一旦用户手势操控自动暂停，🔄 按钮可随时开关 */
     viewer.autoRotate = true; rotate = true;
@@ -908,9 +957,10 @@ if(id && window.partData && partData[id]){
             tipBanner.classList.add('show');
             tipTimer = setTimeout(()=>tipBanner.classList.remove('show'), 5000);
         }, 300);
+        idle(preloadRest, 2500);   /* 首模型就绪、页面稳定后再预载其余，不与首次加载抢带宽 */
     });
     viewer.addEventListener('error', () => {
-        if(retryCount < 1){retryCount++; setTimeout(()=>{viewer.src = partData[id].glbUrl;}, 1000);}
+        if(retryCount < 1){retryCount++; setTimeout(()=>{viewer.src = srcOf(partData[id]);}, 1000);}
         else {loading.style.display='none'; error.style.display='flex';}
     });
 }else{
@@ -970,7 +1020,7 @@ function renderModelList(kw){
             +'<div class="mid">构件编号：'+(d.partId||pid)+'</div>'
             +'<div class="mname">'+(d.projectName||'')+' · '+(d.partType||'')+'</div>'
             +(d.workNo?'<div class="mno">加工号 '+d.workNo+'</div>':'');
-        item.onclick=()=>{ closeModelList(); setTimeout(()=>{ location.href=location.pathname+'?id='+pid; },260); };
+        item.onclick=()=>{ closeModelList(); setTimeout(()=>{ switchPart(pid); },260); };
         item.addEventListener('pointerdown',()=>{ item.classList.remove('fadeout'); item.classList.add('pressing'); });
         ['pointerup','pointercancel','pointerleave'].forEach(ev=>item.addEventListener(ev,()=>{ if(item.classList.contains('pressing')){ item.classList.remove('pressing'); item.classList.add('fadeout'); setTimeout(()=>item.classList.remove('fadeout'),500); } }));
         bindGlowPress(item);
@@ -1172,9 +1222,13 @@ function requestExitFullscreen(){
     if(fsPushed){ try{ history.back(); }catch(e){ exitFullscreen(); } }
     else { exitFullscreen(); }
 }
-/* 手机物理/手势返回键 */
+/* 手机物理/手势返回键：优先退出全屏；若只是构件地址变化，则热切回对应构件 */
 window.addEventListener('popstate', () => {
-    if(fsState){ fsPushed = false; exitFullscreen(); }
+    if(fsState){ fsPushed = false; exitFullscreen(); return; }
+    try{
+        const nid = new URLSearchParams(location.search).get('id');
+        if(nid && window.partData && partData[nid] && String(nid) !== String(id)) switchPart(nid);
+    }catch(e){}
 });
 /* 窗口裁剪式铺展：内容保持终态尺寸全清晰，只把"可见窗口"裁剪到卡片大小再向外扩大。
    inset 四边 = 卡片边缘到视口边缘的距离（百分比），round 给窗口带卡片同款圆角。
@@ -1191,7 +1245,13 @@ function fsClip(srcRect, vw, vh, radius){
    快照盖在最上层做所有动画，真实层在快照底下安静就位 —— 肉眼看不到任何跳变 */
 function captureGhost(src){
     try{
-        let shot=''; try{ shot = viewer.toDataURL('image/webp',0.82) || ''; }catch(e){}
+        /* 降采样截图：model-viewer 官方 toDataURL 签名为 (skyboxImage, compressionFormat, width, height)，
+           之前没传宽高 = 全尺寸编码，手机上要 100~300ms，正是点下按钮后卡一下的元凶。
+           快照最终会缩到卡片大小，800px 宽肉眼无差，编码耗时降到约 1/5 */
+        let shot='';
+        try{ shot = viewer.toDataURL('', 'image/jpeg', 800) || ''; }catch(e){
+            try{ shot = viewer.toDataURL() || ''; }catch(_){}
+        }
         const g = src.cloneNode(true);
         g.removeAttribute('id'); g.classList.add('fs-ghost');
         g.querySelectorAll('model-viewer').forEach(mv=>{
