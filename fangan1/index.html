@@ -349,14 +349,12 @@
                 linear-gradient(160deg,#fefeff 0%,#f6fafc 52%,#f9f8fc 100%);
             opacity:0;transition:opacity .5s cubic-bezier(.22,.61,.36,1);
         }
-        /* 进出全屏动画期间：面板毛玻璃临时关闭（画面本身在运动，肉眼不可见差异），
-           避免父层 transform 动画逐帧重算 backdrop-filter 导致掉帧；落位后自动恢复 */
-        body.fs-anim .model-container,
-        body.fs-anim .info-card,
-        body.fs-anim .model-item,
-        body.fs-anim .ml-search input,
-        body.fs-anim .header,
-        body.fs-anim .fs-ctrl{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        /* ===== 进出场快照层：静态克隆（3D 换成图片），铺展/收拢只发生在它身上。
+           内容完全静止 + clip-path/opacity 动画 = GPU 合成，零重绘，这是流畅的根本保证；
+           真实层从第 1 帧就是终态、全程不动，不存在淡入淡出，所以不可能闪 ===== */
+        .fs-ghost,.fs-ghost *{animation:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        .fs-ghost{box-sizing:border-box;will-change:transform,opacity;}
+        .fs-ghost img{display:block;background:transparent;}
 
         /* ===== 全屏控制按钮层 ===== */
         .fs-ctrl-layer{position:fixed;inset:0;z-index:9100;pointer-events:none;}
@@ -1046,6 +1044,8 @@ function enterFullscreen(type, isSwitch, reuse){
     const rect = el.getBoundingClientRect();
     const srcRect = type === 'page' ? modelContainer.getBoundingClientRect() : rect;
     const vw = window.innerWidth, vh = window.innerHeight;
+    /* 先冻结当前画面为静态快照（3D 换成图片），后面所有运动都发生在快照上，真实内容零重绘 */
+    const homeGhost = (!isSwitch && !reuse) ? captureGhost(fullWrap) : null;
     const saved = {
         position: el.style.position, left: el.style.left, top: el.style.top,
         width: el.style.width, height: el.style.height, zIndex: el.style.zIndex,
@@ -1133,53 +1133,37 @@ function enterFullscreen(type, isSwitch, reuse){
     fullWrap.classList.remove('ls-card');
     fullWrap.classList.remove('fs-exiting');
 
-    /* 最终布局一次性到位：fixed 铺满，内容一开始就是终态尺寸 */
+    /* 最终布局一次性到位：真实层从第 1 帧就是终态、全程静止 ——
+       所有动画只发生在最上层的"静态克隆"上（纯 GPU 的 scale+opacity），
+       真实页面零重绘、落位点与克隆同源，结构上杜绝卡顿/闪烁/跳变 */
     el.style.position = "fixed";
     el.style.left = "0px"; el.style.top = "0px";
     el.style.width = "100vw"; el.style.height = "100vh";
     el.style.zIndex = "9002";
-    el.style.willChange = "clip-path";
+    el.style.opacity = "1";
+    el.style.transform = "none";
+    el.style.clipPath = "";
+    el.style.willChange = "auto";
     if(type === "model") el.style.borderRadius = "26px";
 
-    /* 原位占位块：el 脱流期间顶住主页布局，退出收拢落位时主页完好无塌陷 */
+    /* 原位占位块：el 脱流期间顶住主页布局，退出落位时主页完好无塌陷 */
     const ph = document.createElement('div');
     ph.style.cssText = 'height:' + Math.round(rect.height) + 'px;';
     try{ el.parentNode.insertBefore(ph, el); }catch(e){}
 
-    /* 进入 = iOS 18 式"窗口铺展"：
-       内容不做任何缩放（scale 会把 WebGL 画布与毛玻璃逐帧重新栅格化 = 卡顿与发糊的真凶），
-       而是从第 1 帧就以终态尺寸全清晰呈现，只有"可见窗口"用 clip-path 从卡片位置向外扩大；
-       遮罩同步淡入盖住主页 —— 一层在铺、一层在盖，同一节奏，一体渐进。 */
-    el.style.transition = "none";
-    el.style.opacity = "1";
-    el.style.transform = "none";
-    el.style.clipPath = fsClip(srcRect, vw, vh, 26);
     bg.style.transition = "none";
-    bg.style.opacity = reuse ? "1" : "0";
+    bg.style.opacity = "1";   /* 遮罩直接到位：此刻快照还盖在最上面，任何变化都看不见 */
 
     fsState = { el, type, saved, rect, srcRect, bg, ctrl, ph, isLandscape:false, wantLandscape:false, cssRotated:false };
     if(!isSwitch){ try{ history.pushState({fs:type}, "", "#" + (type==="model"?"model-full":"page-full")); fsPushed = true; }catch(e){} }
-    document.body.classList.add('fs-anim');
     void el.offsetHeight;
     requestAnimationFrame(() => requestAnimationFrame(() => {
-        /* 守卫：模型解压阻塞主线程可能导致本回调严重延迟；若期间横屏等逻辑已改写 transform，不覆盖，只补可见性 */
-        if(el.style.transform && el.style.transform.indexOf('rotate') >= 0){
-            el.style.clipPath = '';
-            bg.style.transition = "opacity 460ms " + EASE; bg.style.opacity = "1";
-            setTimeout(()=>{ try{ document.body.classList.remove('fs-anim'); }catch(e){} try{ safeResize(); }catch(e){} }, 520);
-            return;
-        }
+        /* 进入 = "铺展"：盖在顶上的主页快照整体向卡片中心收缩并渐隐 ——
+           窗口外露出的正是已就位的新页面，视觉上等于新页面从卡片慢慢铺满全屏、
+           旧页面同步收退，一个连续动作。收缩终点与真实卡片像素级同源，零跳变 */
         const dur = isSwitch ? 460 : FS_IN_MS;
-        el.style.transition = "clip-path " + dur + "ms " + EASE_SET;
-        el.style.clipPath = "inset(0% 0% 0% 0% round 0px)";
-        if(!reuse){ bg.style.transition = "opacity " + dur + "ms " + EASE; bg.style.opacity = "1"; }
-        /* 落位收尾：清理裁剪/性能提示/重建画布，全部放在动画结束之后，动画期间主线程零打扰 */
-        setTimeout(()=>{
-            try{ document.body.classList.remove('fs-anim'); }catch(e){}
-            el.style.willChange = "auto";
-            el.style.clipPath = '';
-            try{ safeResize(); }catch(e){}
-        }, dur + 90);
+        collapseGhost(homeGhost, srcRect, vw, vh, dur);
+        setTimeout(()=>{ try{ safeResize(); }catch(e){} }, dur + 140);
     }));
     setTimeout(()=>{ ctrl.querySelectorAll(".fs-ctrl").forEach(b=>b.classList.add("show")); }, 200);
 }
@@ -1203,48 +1187,77 @@ function fsClip(srcRect, vw, vh, radius){
     const b = Math.max(0, (vh - srcRect.top - srcRect.height) / vh * 100);
     return 'inset(' + t.toFixed(2) + '% ' + r.toFixed(2) + '% ' + b.toFixed(2) + '% ' + l.toFixed(2) + '% round ' + (radius||0) + 'px)';
 }
+/* 克隆当前画面为静态快照（3D 换成图片，绝不新建第二个 WebGL 上下文）。
+   快照盖在最上层做所有动画，真实层在快照底下安静就位 —— 肉眼看不到任何跳变 */
+function captureGhost(src){
+    try{
+        let shot=''; try{ shot = viewer.toDataURL('image/webp',0.82) || ''; }catch(e){}
+        const g = src.cloneNode(true);
+        g.removeAttribute('id'); g.classList.add('fs-ghost');
+        g.querySelectorAll('model-viewer').forEach(mv=>{
+            const img=document.createElement('img');
+            if(shot) img.src=shot;
+            img.style.cssText='width:100%;height:100%;object-fit:contain;display:block;border:0;';
+            mv.replaceWith(img);
+        });
+        g.querySelectorAll('.toolbar,#loading,.tip-banner,.progress,.fs-dock,.fs-ctrl-layer').forEach(n=>n.remove());
+        const r=src.getBoundingClientRect();
+        g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;';
+        document.body.appendChild(g);
+        return g;
+    }catch(e){ return null; }
+}
+/* 快照向源卡片中心收缩淡出（进入动画）：等比 scale，中心对齐卡片中心，
+   终点尺寸=卡片尺寸，与底下真实卡片像素级重合，消失瞬间零跳变 */
+function collapseGhost(g, srcRect, vw, vh, dur){
+    if(!g) return;
+    const cx = ((srcRect.left + srcRect.width/2)/vw*100).toFixed(2);
+    const cy = ((srcRect.top + srcRect.height/2)/vh*100).toFixed(2);
+    const s = Math.max(0.12, Math.min(srcRect.width/vw, srcRect.height/vh));
+    g.style.transition='none'; g.style.transformOrigin=cx+'% '+cy+'%'; g.style.transform='scale(1)'; g.style.opacity='1';
+    void g.offsetHeight;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        g.style.transition='transform '+dur+'ms '+EASE_SET+',opacity '+(dur*0.82)+'ms '+EASE_IN;
+        g.style.transform='scale('+s.toFixed(4)+')'; g.style.opacity='0';
+    }));
+    setTimeout(()=>{ if(g.parentNode) g.remove(); }, dur+140);
+}
+/* 快照整体柔和淡出（整页退出/互切用）：真实画面已在快照底下就位，淡出即"慢慢显现" */
+function fadeGhostOut(g, opts){
+    if(!g) return;
+    opts = opts || {};
+    const dur = opts.dur || 420;
+    g.style.transition='none'; g.style.opacity='1'; g.style.transformOrigin='center center'; g.style.transform=opts.from||'none';
+    void g.offsetHeight;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        g.style.transition='opacity '+dur+'ms '+EASE_IN+',transform '+dur+'ms '+EASE_IN;
+        g.style.opacity='0'; g.style.transform=opts.to||'scale(.994)';
+    }));
+    setTimeout(()=>{ if(g.parentNode) g.remove(); }, dur+140);
+}
 function exitFullscreen(){
     const state = fsState;
     const { el, type, saved, bg, ctrl, rect, srcRect } = state;
     state.exiting = true;
-    document.body.classList.add('fs-anim');
     try{ resetGestureState(false); }catch(e){}
     if(state.inTimer){ clearTimeout(state.inTimer); state.inTimer = null; }
     const switching = pendingFs; pendingFs = null;
     ctrl.querySelectorAll('.fs-ctrl').forEach(b=>{ b.style.transitionDelay='0ms'; b.classList.remove('show'); });
 
     const vw = window.innerWidth, vh = window.innerHeight;
-    const finish = () => {
-        if(state.ph){ try{ state.ph.remove(); }catch(e){} state.ph = null; }
-        if(switching){
-            /* 互切：遮罩全程不透明垫底，旧层窗口收拢后新层立即从卡片位置铺展，一段连贯动作 */
-            restoreLayout(el, state, bg, ctrl, true);
-            enterFullscreen(switching, true, {bg, ctrl});
-        } else {
-            restoreLayout(el, state, bg, ctrl);
-            try{ document.body.classList.remove('fs-anim'); }catch(e){}
-            try{ safeResize(); }catch(e){}
-        }
-    };
-    const collapseTo = (dur, cb) => {
-        /* 收拢 = 进入的逆放：可见窗口从全屏裁剪回卡片大小，内容全程终态尺寸不缩放；
-           终点与真实卡片像素级重合，落位零跳变 */
-        el.style.clipPath = "inset(0% 0% 0% 0% round 0px)";
-        void el.offsetHeight;
-        requestAnimationFrame(()=>requestAnimationFrame(()=>{
-            el.style.transition = 'clip-path ' + dur + 'ms ' + EASE_SET;
-            el.style.clipPath = fsClip(srcRect, vw, vh, type === 'model' ? 26 : 26);
-            setTimeout(cb, dur);
-        }));
-    };
 
-    /* 横屏退出：resetLandscape 在 exiting 态会直接 return，这里内联同款平滑复位 */
+    /* 退出第一步：立刻冻结当前全屏画面为静态快照盖顶（z-index 最高）。
+       真实层随后在快照底下"安静复位"回主页 —— 这一整帧的变化被快照完全遮住，肉眼不可见，
+       所以不存在"啪一下跳回主页"的闪跳；接着让快照收拢回卡片位置并淡出，
+       底下已就位的真实主页同步慢慢显现 —— 一个连续动作，全程真实内容零重绘 */
+    const fsGhost = captureGhost(el);
+
+    /* 横屏退出：先把画面平滑转回竖屏，再冻结快照收拢，避免旋转跳变 */
     const unwindLandscape = (immediate, cb) => {
         if(!state.isLandscape){ if(cb) cb(); return; }
         state.isLandscape = false; state.wantLandscape = false; state.cssRotated = false;
         try{ if(ctrl) ctrl.classList.remove('fs-ls'); }catch(e){}
         fullWrap.classList.remove('ls-card');
-        /* 盒尺寸同步换回竖屏几何（与 applyOrientation 的交换对称） */
         el.style.left='0px'; el.style.top='0px';
         el.style.width='100vw'; el.style.height='100vh';
         if(immediate){
@@ -1263,40 +1276,48 @@ function exitFullscreen(){
     };
 
     if(switching){
+        /* 互切：快照盖顶 → 真实结构复位并重建新全屏 → 快照淡出，新画面在其下显现 */
+        if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
         if(type === 'model'){
-            unwindLandscape(true, ()=>collapseTo(300, finish));
+            unwindLandscape(true, ()=>{ restoreLayout(el, state, bg, ctrl, true); enterFullscreen(switching, true, {bg, ctrl}); fadeGhostOut(fsGhost, {dur:440}); });
         } else {
-            el.style.transition = 'opacity 260ms ' + EASE_IN;
-            el.style.opacity = '0';   /* 整页层淡出；遮罩全程垫底，主页不会露出闪变 */
-            setTimeout(finish, 260);
+            restoreLayout(el, state, bg, ctrl, true); enterFullscreen(switching, true, {bg, ctrl}); fadeGhostOut(fsGhost, {dur:440});
         }
         return;
     }
 
     if(type === 'model'){
-        /* 退出构件全屏 = 进入的完全逆放：画面慢慢收拢回卡片，遮罩同步淡出，
-           底下的主页在收拢的全过程中同步慢慢显现 —— 一个动作，不分两段 */
-        unwindLandscape(false, ()=>{
-            bg.style.transition = 'opacity 480ms ' + EASE; bg.style.opacity = '0';
-            collapseTo(480, finish);
-        });
+        /* 退出构件全屏 = 进入的完全逆放：全屏快照收拢回卡片，底下主页同步显现。
+           横屏时先把画面平滑转回竖屏，再冻结快照 —— 快照不带旋转，收拢轨迹才正确 */
+        if(state.isLandscape){
+            unwindLandscape(false, ()=>{
+                const g = captureGhost(el);
+                if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
+                restoreLayout(el, state, bg, ctrl);
+                try{ safeResize(); }catch(e){}
+                void el.offsetHeight;
+                collapseGhost(g, srcRect, vw, vh, 480);
+            });
+        } else {
+            if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
+            restoreLayout(el, state, bg, ctrl);
+            try{ safeResize(); }catch(e){}
+            void el.offsetHeight;
+            collapseGhost(fsGhost, srcRect, vw, vh, 480);
+        }
     } else {
-        /* 退出整页全屏：整页层就是主页本身，不能收小；
-           先借遮罩垫底瞬间复位布局（变化被遮住看不见），再让遮罩淡出 ——
-           视觉上就是全屏内容慢慢消失、底下的主页内容同步慢慢显现 */
+        /* 退出整页全屏：整页层就是主页本身，快照盖顶后瞬间复位（被遮住看不见），
+           再让快照与遮罩同步柔和淡出 —— 视觉上就是全屏慢慢消失、底下主页慢慢显现 */
         restoreLayout(el, state, bg, ctrl, true);
         if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
         document.body.classList.remove('in-fs');
         ctrl.remove();
         try{ viewer.setAttribute('interaction-prompt','auto'); viewer.interactionPrompt='auto'; }catch(e){}
-        try{ document.body.classList.remove('fs-anim'); }catch(e){}
         try{ syncControls(); }catch(e){}
         safeResize();
         void el.offsetHeight;
-        requestAnimationFrame(()=>requestAnimationFrame(()=>{
-            bg.style.transition = 'opacity 460ms ' + EASE;
-            bg.style.opacity = '0';
-        }));
+        fadeGhostOut(fsGhost, {dur:460});
+        bg.style.transition = 'opacity 460ms ' + EASE; bg.style.opacity = '0';
         setTimeout(()=>{ bg.remove(); }, 540);
     }
 }
