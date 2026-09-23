@@ -17,18 +17,19 @@
             --e-expo:cubic-bezier(.16,1,.3,1);
             --e-leave:cubic-bezier(.5,0,.68,.3);
             --gs:440px;--ga:1;--gc1:rgba(182,208,240,.15);--gc2:rgba(214,230,248,.09);
-            /* ===== 柔光玻璃材质（Apple vibrancy 同款结构）=====
-               ① 通透：底色 alpha 压到最低，让"模糊后的背景"主导面板颜色；
-               ② 顶光柔泽：光从顶部来，弧形渐弱（苹果顶部光带更宽更柔），底部回光；
-               ③ 边缘泛光：1.5px 上亮下回亮折射线 + .5px 全周白描边 + 双层外柔光晕，
-                  边缘"包光"是苹果高级感最直观的特征；
-               ④ 蚀刻微粒：3.5% 细噪点消除色带 */
-            --g-blur:blur(36px) saturate(225%) brightness(1.07);
-            --g-sheen:linear-gradient(180deg,rgba(255,255,255,.74) 0%,rgba(255,255,255,.30) 16%,rgba(255,255,255,.05) 42%,rgba(255,255,255,0) 62%,rgba(255,255,255,.09) 86%,rgba(255,255,255,.32) 100%);
-            --g-sheen-hd:linear-gradient(180deg,rgba(255,255,255,.92) 0%,rgba(255,255,255,.44) 22%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.03) 70%,rgba(255,255,255,.16) 88%,rgba(255,255,255,.42) 100%);
-            --g-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
-            --g-edge:linear-gradient(160deg,rgba(255,255,255,1) 0%,rgba(226,238,255,.88) 18%,rgba(255,255,255,.32) 44%,rgba(240,232,255,.22) 58%,rgba(226,238,255,.66) 82%,rgba(255,255,255,1) 100%);
-            --g-inner:inset 0 1.5px 1.5px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.42),inset 0 0 30px rgba(255,255,255,.12),0 0 0 .5px rgba(255,255,255,.8),0 0 16px rgba(255,255,255,.5),0 0 38px rgba(255,255,255,.26),0 0 60px rgba(196,216,255,.18);
+            /* ===== 柔光玻璃材质（iOS 18 Liquid Glass 结构）=====
+               ① 高透：底色压极低，模糊后的背景主导面板颜色（lensing 感）；
+               ② 饱和提亮：玻璃把背景"拧艳"而不是压灰；
+               ③ 顶部镜面高光：上缘一条锐亮 spec 线 + 弧形渐弱柔泽；
+               ④ 彩色边缘折射：折射线带冷蓝/暖紫色相，不是死白；
+               ⑤ 底部内阴影：玻璃厚度感，苹果面板下缘那条极淡的暗线；
+               ⑥ 蚀刻微粒：3.2% 细噪点消除色带 */
+            --g-blur:blur(30px) saturate(235%) brightness(1.08);
+            --g-sheen:linear-gradient(180deg,rgba(255,255,255,.85) 0%,rgba(255,255,255,.34) 10%,rgba(255,255,255,.06) 34%,rgba(255,255,255,0) 58%,rgba(255,255,255,.05) 84%,rgba(255,255,255,.22) 100%);
+            --g-sheen-hd:linear-gradient(180deg,rgba(255,255,255,1) 0%,rgba(255,255,255,.52) 14%,rgba(255,255,255,.10) 44%,rgba(255,255,255,.02) 66%,rgba(255,255,255,.14) 88%,rgba(255,255,255,.40) 100%);
+            --g-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .032 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+            --g-edge:linear-gradient(168deg,rgba(255,255,255,1) 0%,rgba(214,232,255,.92) 16%,rgba(255,255,255,.34) 42%,rgba(238,226,255,.22) 58%,rgba(214,232,255,.62) 82%,rgba(255,255,255,1) 100%);
+            --g-inner:inset 0 1px 0 rgba(255,255,255,1),inset 0 2px 6px rgba(255,255,255,.5),inset 0 -1px 0 rgba(120,145,185,.10),inset 0 -6px 16px rgba(140,165,205,.06),inset 0 0 34px rgba(255,255,255,.14),0 0 0 .5px rgba(255,255,255,.72),0 0 18px rgba(255,255,255,.4),0 0 44px rgba(200,220,255,.2);
         }
         * {margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
         html,body{height:100%;overscroll-behavior:none;}
@@ -1132,50 +1133,51 @@ function enterFullscreen(type, isSwitch, reuse){
     fullWrap.classList.remove('ls-card');
     fullWrap.classList.remove('fs-exiting');
 
-    /* 最终布局一次性到位：fixed 铺满 */
+    /* 最终布局一次性到位：fixed 铺满，内容一开始就是终态尺寸 */
     el.style.position = "fixed";
     el.style.left = "0px"; el.style.top = "0px";
     el.style.width = "100vw"; el.style.height = "100vh";
     el.style.zIndex = "9002";
-    el.style.willChange = "transform";
+    el.style.willChange = "clip-path";
     if(type === "model") el.style.borderRadius = "26px";
 
-    /* 进入 = "铺展"（一体渐进感）：
-       真实层从第 1 帧就 100% 可见，绝不淡入 —— 杜绝"慢慢消失再慢慢进来"的两段式；
-       以源卡片中心为原点做等比放大（约 0.6→1），画面从卡片位置慢慢铺满全屏；
-       同时不透明遮罩同步淡入盖住底下主页 —— 一层在铺、一层在盖，同一节奏同时完成。
-       全程只有 transform + opacity 两个 GPU 合成属性，零重排零截图，所以不会卡。 */
-    const s0 = fsStartScale(srcRect, vw, vh);
-    const ox = ((srcRect.left + srcRect.width/2)/vw*100).toFixed(2);
-    const oy = ((srcRect.top + srcRect.height/2)/vh*100).toFixed(2);
-    el.style.transformOrigin = ox + "% " + oy + "%";
+    /* 原位占位块：el 脱流期间顶住主页布局，退出收拢落位时主页完好无塌陷 */
+    const ph = document.createElement('div');
+    ph.style.cssText = 'height:' + Math.round(rect.height) + 'px;';
+    try{ el.parentNode.insertBefore(ph, el); }catch(e){}
+
+    /* 进入 = iOS 18 式"窗口铺展"：
+       内容不做任何缩放（scale 会把 WebGL 画布与毛玻璃逐帧重新栅格化 = 卡顿与发糊的真凶），
+       而是从第 1 帧就以终态尺寸全清晰呈现，只有"可见窗口"用 clip-path 从卡片位置向外扩大；
+       遮罩同步淡入盖住主页 —— 一层在铺、一层在盖，同一节奏，一体渐进。 */
     el.style.transition = "none";
     el.style.opacity = "1";
-    el.style.transform = "scale(" + s0 + ")";
+    el.style.transform = "none";
+    el.style.clipPath = fsClip(srcRect, vw, vh, 26);
     bg.style.transition = "none";
     bg.style.opacity = reuse ? "1" : "0";
 
-    fsState = { el, type, saved, rect, srcRect, bg, ctrl, isLandscape:false, wantLandscape:false, cssRotated:false };
+    fsState = { el, type, saved, rect, srcRect, bg, ctrl, ph, isLandscape:false, wantLandscape:false, cssRotated:false };
     if(!isSwitch){ try{ history.pushState({fs:type}, "", "#" + (type==="model"?"model-full":"page-full")); fsPushed = true; }catch(e){} }
     document.body.classList.add('fs-anim');
     void el.offsetHeight;
     requestAnimationFrame(() => requestAnimationFrame(() => {
         /* 守卫：模型解压阻塞主线程可能导致本回调严重延迟；若期间横屏等逻辑已改写 transform，不覆盖，只补可见性 */
         if(el.style.transform && el.style.transform.indexOf('rotate') >= 0){
-            el.style.opacity = "1";
+            el.style.clipPath = '';
             bg.style.transition = "opacity 460ms " + EASE; bg.style.opacity = "1";
             setTimeout(()=>{ try{ document.body.classList.remove('fs-anim'); }catch(e){} try{ safeResize(); }catch(e){} }, 520);
             return;
         }
         const dur = isSwitch ? 460 : FS_IN_MS;
-        el.style.transition = "transform " + dur + "ms " + EASE_SET;
-        el.style.transform = "scale(1)";
+        el.style.transition = "clip-path " + dur + "ms " + EASE_SET;
+        el.style.clipPath = "inset(0% 0% 0% 0% round 0px)";
         if(!reuse){ bg.style.transition = "opacity " + dur + "ms " + EASE; bg.style.opacity = "1"; }
-        /* 落位收尾：恢复原点/关闭性能提示/重建画布，全部放在动画结束之后，动画期间主线程零打扰 */
+        /* 落位收尾：清理裁剪/性能提示/重建画布，全部放在动画结束之后，动画期间主线程零打扰 */
         setTimeout(()=>{
             try{ document.body.classList.remove('fs-anim'); }catch(e){}
             el.style.willChange = "auto";
-            el.style.transformOrigin = "center center";
+            el.style.clipPath = '';
             try{ safeResize(); }catch(e){}
         }, dur + 90);
     }));
@@ -1190,13 +1192,16 @@ function requestExitFullscreen(){
 window.addEventListener('popstate', () => {
     if(fsState){ fsPushed = false; exitFullscreen(); }
 });
-/* 铺展动画起始缩放：以源卡片中心为原点，等比缩到接近卡片大小。
-   取宽高比的几何平均，收拢终点最贴近卡片真实尺寸，落位衔接跳变最小；
-   下限 0.55 防止小卡片起步时文字糊成一团 */
-function fsStartScale(srcRect, vw, vh){
-    if(!srcRect || !srcRect.width || !srcRect.height) return 0.82;
-    const s = Math.sqrt((srcRect.width/vw) * (srcRect.height/vh));
-    return Math.max(0.55, Math.min(0.92, s)).toFixed(4);
+/* 窗口裁剪式铺展：内容保持终态尺寸全清晰，只把"可见窗口"裁剪到卡片大小再向外扩大。
+   inset 四边 = 卡片边缘到视口边缘的距离（百分比），round 给窗口带卡片同款圆角。
+   clip-path 动画由 GPU 合成，不触发重排/重栅格化，所以模型不糊、画面不卡 */
+function fsClip(srcRect, vw, vh, radius){
+    if(!srcRect || !srcRect.width) return 'inset(0% 0% 0% 0% round 0px)';
+    const l = Math.max(0, srcRect.left / vw * 100);
+    const t = Math.max(0, srcRect.top / vh * 100);
+    const r = Math.max(0, (vw - srcRect.left - srcRect.width) / vw * 100);
+    const b = Math.max(0, (vh - srcRect.top - srcRect.height) / vh * 100);
+    return 'inset(' + t.toFixed(2) + '% ' + r.toFixed(2) + '% ' + b.toFixed(2) + '% ' + l.toFixed(2) + '% round ' + (radius||0) + 'px)';
 }
 function exitFullscreen(){
     const state = fsState;
@@ -1210,8 +1215,9 @@ function exitFullscreen(){
 
     const vw = window.innerWidth, vh = window.innerHeight;
     const finish = () => {
+        if(state.ph){ try{ state.ph.remove(); }catch(e){} state.ph = null; }
         if(switching){
-            /* 互切：遮罩全程不透明垫底，旧层收拢/淡出后新层立即从卡片位置铺展，一段连贯动作 */
+            /* 互切：遮罩全程不透明垫底，旧层窗口收拢后新层立即从卡片位置铺展，一段连贯动作 */
             restoreLayout(el, state, bg, ctrl, true);
             enterFullscreen(switching, true, {bg, ctrl});
         } else {
@@ -1221,17 +1227,13 @@ function exitFullscreen(){
         }
     };
     const collapseTo = (dur, cb) => {
-        /* 全屏内容以源卡片中心为原点等比收拢回卡片位置（进入的逆动作）；
-           最后 140ms 同步淡出 —— 收拢终点与卡片实际尺寸间的微小差距在透明中完成交接，不跳变 */
-        const s0 = fsStartScale(srcRect, vw, vh);
-        const ox = ((srcRect.left + srcRect.width/2)/vw*100).toFixed(2);
-        const oy = ((srcRect.top + srcRect.height/2)/vh*100).toFixed(2);
-        el.style.transformOrigin = ox + "% " + oy + "%";
+        /* 收拢 = 进入的逆放：可见窗口从全屏裁剪回卡片大小，内容全程终态尺寸不缩放；
+           终点与真实卡片像素级重合，落位零跳变 */
+        el.style.clipPath = "inset(0% 0% 0% 0% round 0px)";
         void el.offsetHeight;
         requestAnimationFrame(()=>requestAnimationFrame(()=>{
-            el.style.transition = 'transform ' + dur + 'ms ' + EASE_SET + ', opacity 140ms ease-in';
-            el.style.transform = 'scale(' + s0 + ')';
-            setTimeout(()=>{ try{ el.style.opacity = '0'; }catch(e){} }, dur - 140);
+            el.style.transition = 'clip-path ' + dur + 'ms ' + EASE_SET;
+            el.style.clipPath = fsClip(srcRect, vw, vh, type === 'model' ? 26 : 26);
             setTimeout(cb, dur);
         }));
     };
@@ -1242,6 +1244,9 @@ function exitFullscreen(){
         state.isLandscape = false; state.wantLandscape = false; state.cssRotated = false;
         try{ if(ctrl) ctrl.classList.remove('fs-ls'); }catch(e){}
         fullWrap.classList.remove('ls-card');
+        /* 盒尺寸同步换回竖屏几何（与 applyOrientation 的交换对称） */
+        el.style.left='0px'; el.style.top='0px';
+        el.style.width='100vw'; el.style.height='100vh';
         if(immediate){
             el.style.transition = 'none'; el.style.transformOrigin = 'center center'; el.style.transform = 'none';
             void el.offsetHeight;
@@ -1280,6 +1285,7 @@ function exitFullscreen(){
            先借遮罩垫底瞬间复位布局（变化被遮住看不见），再让遮罩淡出 ——
            视觉上就是全屏内容慢慢消失、底下的主页内容同步慢慢显现 */
         restoreLayout(el, state, bg, ctrl, true);
+        if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
         document.body.classList.remove('in-fs');
         ctrl.remove();
         try{ viewer.setAttribute('interaction-prompt','auto'); viewer.interactionPrompt='auto'; }catch(e){}
@@ -1297,6 +1303,8 @@ function exitFullscreen(){
 function restoreLayout(el, state, bg, ctrl, keepOverlay){
     const { saved } = state;
     el.style.transition = 'none';
+    el.style.clipPath = '';
+    el.style.willChange = saved.willChange || '';
     el.style.transformOrigin = saved.transformOrigin;
     el.style.position = saved.position;
     el.style.left = saved.left; el.style.top = saved.top;
@@ -1339,17 +1347,23 @@ function applyOrientation(){
     if(fsState.ctrl) fsState.ctrl.classList.toggle('fs-ls', css);
     fullWrap.classList.toggle('ls-card', css);
     try{ syncControls(); }catch(e){}
-    /* 纯 transform 旋转（rotate+等比 scale）：全程零重排。
-       动画化 width/height/left/top 会让 WebGL 画布逐帧重建 = 横屏卡顿的头号来源；
-       几何盒始终 100vw×100vh 不动，视觉旋转全部交给合成层的 transform */
-    el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
+    /* 横屏几何（修正版）：盒尺寸交换为 100vh×100vw（画布按横屏比例重建一次，模型适配横屏视野），
+       旋转只走 transform。之前 scale(vh/vw) 方向写反，把模型放大了约 4 倍且无法缩小 —— 本次修复。
+       尺寸交换放在动画起点一次完成，紧随其后的旋转动画掩盖交接帧，观感连贯 */
     el.style.transformOrigin = 'center center';
-    el.style.left = '0px'; el.style.top = '0px';
-    el.style.width = '100vw'; el.style.height = '100vh';
-    el.style.transform = css ? ('rotate(90deg) scale(' + (window.innerHeight/window.innerWidth).toFixed(5) + ')') : 'none';
+    if(css){
+        el.style.left='50%'; el.style.top='50%';
+        el.style.width='100vh'; el.style.height='100vw';
+    } else {
+        el.style.left='0px'; el.style.top='0px';
+        el.style.width='100vw'; el.style.height='100vh';
+    }
+    void el.offsetHeight;
+    el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
+    el.style.transform = css ? 'translate(-50%,-50%) rotate(90deg)' : 'none';
     try{ resetGestureState(true); }catch(e){}
     showToast(want ? '横屏模式' : '竖屏模式');
-    /* resize 与相机复位放到旋转收尾之后，动画期间主线程零打扰 */
+    /* 画布重建与相机复位放到旋转动画收尾之后，动画期间主线程零打扰 */
     setTimeout(function(){ try{ safeResize(); }catch(e){} resetCameraView(); setTimeout(safeResize, 80); }, ORI_MS + 60);
 }
 function toggleLandscape(){
