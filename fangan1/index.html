@@ -714,13 +714,6 @@
         body.in-fs .info-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
         body.in-fs .model-container{background:var(--g-grain),var(--g-sheen),rgba(246,250,254,.55);}
         body.in-fs .info-card{background:var(--g-grain),var(--g-sheen),rgba(249,252,255,.6);}
-        /* 进/出全屏过渡只走 transform，提升为合成层，避免重排重绘卡顿 */
-        .full-wrap.fs-anim, .model-container.fs-anim{will-change:transform;}
-        /* 动画进行期间临时关闭面板毛玻璃：父层做 transform 动画时，
-           子层 backdrop-filter 会被逐帧重算模糊 —— 这是手机上进出全屏掉帧的头号隐形杀手。
-           快照盖顶期间真实层本就不可见，关闭无观感损失 */
-
-
         /* ===== 信息卡标题行工具按钮（复制 / 管理员） ===== */
         .info-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;padding-bottom:12px;border-bottom:1px solid rgba(50,100,180,.12);}
         .info-head h3{margin:0;padding:0;border:none;}
@@ -1289,7 +1282,9 @@ function holdSpin(){
     if(rotate && !spinHold){ spinHold = true; try{ viewer.autoRotate = false; }catch(e){} }
 }
 function releaseSpin(){
-    if(spinHold){ spinHold = false; try{ viewer.autoRotate = true; }catch(e){} }
+    /* 过渡期间用户可能已手动关掉自旋（点按模型即停）：此时绝不能替他打开，
+       只认 rotate 标志 —— 它由按钮/手势统一维护，是用户意图的唯一事实来源 */
+    if(spinHold){ spinHold = false; try{ if(rotate) viewer.autoRotate = true; }catch(e){} }
 }
 /* 全屏图标直接复用主页按钮字形，改主页即同步，无需重新认图标 */
 function homeIcon(id){ const h=document.getElementById(id); return h ? h.textContent.trim() : ''; }
@@ -1309,11 +1304,11 @@ function enterFullscreen(type, isSwitch, reuse){
     holdSpin();
     /* 先冻结当前画面为静态快照（3D 换成图片），后面所有运动都发生在快照上，真实内容零重绘 */
     const homeGhost = (!isSwitch && !reuse) ? captureGhost(fullWrap) : null;
-    /* 关键：快照一插好就立刻启动淡出，绝不等后面的 DOM 重建。
-       重建全屏结构 + 模型解码会长时间占住主线程，若把淡出排在它后面，
-       用户会看到画面"冻住一下再突然消散"——这就是残影感的来源。
-       纯 CSS 动画在插入后的首个合成帧自行播放，主线程忙不忙都照跑 */
-    if(homeGhost) collapseGhost(homeGhost, srcRect, vw, vh, XF_MS);
+    /* 快照一插好就立刻启动淡出，绝不等后面的 DOM 重建（重建+解码占主线程时动画照跑）。
+       进入用纯交叉淡化：页面快照柔和消散、底下的全屏画面显现 —— 刻意不做"缩向卡片"，
+       因为快照内容是整页（标题+卡片+信息），缩到卡片尺寸会整体乱飘，正是之前的闪影 bug；
+       收缩动画只在退出构件全屏时使用（那时快照内容就是全屏模型，缩回卡片才是正确隐喻） */
+    if(homeGhost) fadeGhostOut(homeGhost, {dur:XF_MS});
     const saved = {
         position: el.style.position, left: el.style.left, top: el.style.top,
         width: el.style.width, height: el.style.height, zIndex: el.style.zIndex,
@@ -1443,27 +1438,16 @@ window.addEventListener('popstate', () => {
         if(nid && window.partData && partData[nid] && String(nid) !== String(id)) switchPart(nid);
     }catch(e){}
 });
-/* 窗口裁剪式铺展：内容保持终态尺寸全清晰，只把"可见窗口"裁剪到卡片大小再向外扩大。
-   inset 四边 = 卡片边缘到视口边缘的距离（百分比），round 给窗口带卡片同款圆角。
-   clip-path 动画由 GPU 合成，不触发重排/重栅格化，所以模型不糊、画面不卡 */
-function fsClip(srcRect, vw, vh, radius){
-    if(!srcRect || !srcRect.width) return 'inset(0% 0% 0% 0% round 0px)';
-    const l = Math.max(0, srcRect.left / vw * 100);
-    const t = Math.max(0, srcRect.top / vh * 100);
-    const r = Math.max(0, (vw - srcRect.left - srcRect.width) / vw * 100);
-    const b = Math.max(0, (vh - srcRect.top - srcRect.height) / vh * 100);
-    return 'inset(' + t.toFixed(2) + '% ' + r.toFixed(2) + '% ' + b.toFixed(2) + '% ' + l.toFixed(2) + '% round ' + (radius||0) + 'px)';
-}
 /* 克隆当前画面为静态快照（3D 换成图片，绝不新建第二个 WebGL 上下文）。
    快照盖在最上层做所有动画，真实层在快照底下安静就位 —— 肉眼看不到任何跳变 */
 function captureGhost(src){
     try{
-        /* 降采样截图：model-viewer 官方 toDataURL 签名为 (skyboxImage, compressionFormat, width, height)，
-           之前没传宽高 = 全尺寸编码，手机上要 100~300ms，正是点下按钮后卡一下的元凶。
-           快照最终会缩到卡片大小，800px 宽肉眼无差，编码耗时降到约 1/5 */
+        /* 修正：本地 3.5.0 库的 toDataURL 签名是 (mimeType, quality) 两参数，
+           之前传三个参数会抛异常 → 回退到无参调用 = 全尺寸 PNG 编码（手机上 300~600ms），
+           点下按钮必卡一下 —— 这是卡顿感的主因之一。JPEG 同画质编码快 5 倍以上 */
         let shot='';
-        try{ shot = viewer.toDataURL('', 'image/jpeg', 800) || ''; }catch(e){
-            try{ shot = viewer.toDataURL() || ''; }catch(_){}
+        try{ shot = viewer.toDataURL('image/jpeg', .82) || ''; }catch(e){
+            try{ shot = viewer.toDataURL('image/webp', .82) || ''; }catch(_){}
         }
         const g = src.cloneNode(true);
         g.removeAttribute('id'); g.classList.add('fs-ghost');
@@ -1524,9 +1508,11 @@ function exitFullscreen(){
        快照与画布此刻角度一致，冻结后过渡期间画面完全静止。
        真实层随后在快照底下"安静复位"回主页 —— 这一整帧的变化被快照完全遮住，肉眼不可见，
        所以不存在"啪一下跳回主页"的闪跳；接着让快照收拢回卡片位置并淡出，
-       底下已就位的真实主页同步慢慢显现 —— 一个连续动作，全程真实内容零重绘 */
+       底下已就位的真实主页同步慢慢显现 —— 一个连续动作，全程真实内容零重绘。
+       横屏退出例外：要先做旋转回正动画，此刻盖一张旋转快照反而多余（且回正后才好捕获），跳过 */
     holdSpin();
-    const fsGhost = captureGhost(el);
+    const needGhostNow = !(type === 'model' && state.isLandscape && !switching);
+    const fsGhost = needGhostNow ? captureGhost(el) : null;
 
     /* 横屏退出：先把画面平滑转回竖屏，再冻结快照收拢，避免旋转跳变 */
     const unwindLandscape = (immediate, cb) => {
@@ -1570,7 +1556,6 @@ function exitFullscreen(){
            注意：横屏分支必须等转回竖屏后再捕获，此时先前那张 fsGhost 要先撤掉，
            否则它会永久留在页面上盖住内容 */
         if(state.isLandscape){
-            if(fsGhost){ try{ fsGhost.remove(); }catch(e){} }
             unwindLandscape(false, ()=>{
                 const g = captureGhost(el);
                 if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
@@ -1589,7 +1574,8 @@ function exitFullscreen(){
     } else {
         /* 退出整页全屏：整页层就是主页本身，快照盖顶后瞬间复位（被遮住看不见），
            再让快照与遮罩同步柔和淡出 —— 视觉上就是全屏慢慢消失、底下主页慢慢显现。
-           两层用同一时长同一条曲线，透明度互补，全程不露空也不叠重 */
+           两层用同一时长同一条曲线，透明度互补，全程不露空也不叠重。
+           画布重建挪到淡出结束之后：放动画起点会阻塞主线程，正是退出掉帧的来源 */
         fadeGhostOut(fsGhost, {dur:XF_MS, down:true});
         restoreLayout(el, state, bg, ctrl, true);
         if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
@@ -1597,9 +1583,8 @@ function exitFullscreen(){
         ctrl.remove();
         try{ viewer.setAttribute('interaction-prompt','auto'); viewer.interactionPrompt='auto'; }catch(e){}
         try{ syncControls(); }catch(e){}
-        safeResize();
         bg.style.transition = 'opacity ' + XF_MS + 'ms ' + XFADE; bg.style.opacity = '0';
-        setTimeout(()=>{ bg.remove(); releaseSpin(); }, XF_MS + 120);
+        setTimeout(()=>{ try{ safeResize(); }catch(e){} bg.remove(); releaseSpin(); }, XF_MS + 120);
     }
 }
 function restoreLayout(el, state, bg, ctrl, keepOverlay){
@@ -1636,9 +1621,6 @@ function switchFullscreen(type){
     exitFullscreen();
 }
 
-function applyTransition(el, props){
-    el.style.transition = props.map(p => p + ' .45s ' + EASE).join(',');
-}
 function applyOrientation(){
     if(!fsState || fsState.type !== 'model') return;
     const want = !!fsState.wantLandscape;
