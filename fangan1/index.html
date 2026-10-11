@@ -257,7 +257,7 @@
         }
         .info-card .k{width:92px;color:#8a94a6;flex-shrink:0;font-weight:400;}
         .info-card .v{flex:1;color:#2c3540;word-break:break-all;font-weight:500;}
-        .footer{text-align:center;color:#7a8494;font-size:11px;margin-top:14px;line-height:1.7;transition:opacity .3s;background:#ffffff;border-radius:18px;padding:14px 16px;box-shadow:0 2px 12px rgba(0,0,0,.05);}
+        .footer{text-align:center;color:#7a8494;font-size:10px;margin-top:10px;line-height:1.6;transition:opacity .3s;background:#ffffff;border-radius:14px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.04);}
 
         /* ===== 全屏背景遮罩 ===== */
         .fs-bg{
@@ -479,15 +479,15 @@
 
         /* ===== 管理员密码弹窗 ===== */
         .modal-mask{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;
-            background:rgba(40,70,130,.28);backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%);
+            background:rgba(0,0,0,.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
             opacity:0;pointer-events:none;transition:opacity .32s ease;padding:24px;}
         .modal-mask.show{opacity:1;pointer-events:auto;}
-        .modal-card{width:100%;max-width:340px;background:rgba(238,246,255,.92);border:1px solid rgba(255,255,255,.9);
-            border-radius:22px;padding:24px 22px 20px;box-shadow:0 24px 70px rgba(40,80,150,.32);
+        .modal-card{width:100%;max-width:340px;background:rgba(255,255,255,.96);border:1px solid rgba(0,0,0,.05);
+            border-radius:22px;padding:24px 22px 20px;box-shadow:0 24px 70px rgba(0,0,0,.15);
             transform:translateY(18px) scale(.96);transition:transform .38s cubic-bezier(.22,1,.36,1);}
         .modal-mask.show .modal-card{transform:translateY(0) scale(1);}
-        .modal-title{font-size:17px;font-weight:700;color:#1e3a5f;}
-        .modal-sub{font-size:12.5px;color:#6f93c2;margin-top:5px;line-height:1.5;}
+        .modal-title{font-size:17px;font-weight:700;color:#2c3540;}
+        .modal-sub{font-size:12.5px;color:#8a94a6;margin-top:5px;line-height:1.5;}
         .modal-input{width:100%;box-sizing:border-box;margin-top:16px;height:46px;border-radius:13px;border:1.5px solid rgba(120,160,225,.4);
             background:rgba(255,255,255,.85);padding:0 14px;font-size:16px;color:#1e3a5f;letter-spacing:2px;outline:none;
             transition:border-color .25s ease,box-shadow .25s ease;}
@@ -499,8 +499,8 @@
         .modal-btns{display:flex;gap:10px;margin-top:6px;}
         .mbtn{flex:1;height:44px;border-radius:13px;border:none;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .25s,background .25s;}
         .mbtn:active{transform:scale(.96);}
-        .mbtn.ghost{background:rgba(255,255,255,.7);color:#5b86c0;border:1px solid rgba(120,160,225,.35);}
-        .mbtn.primary{background:linear-gradient(135deg,#5b93e6,#4a7fd6);color:#fff;box-shadow:0 8px 20px rgba(80,130,220,.35);}
+        .mbtn.ghost{background:#f2f4f8;color:#4a7fd6;border:1px solid rgba(0,0,0,.06);}
+        .mbtn.primary{background:#f2f4f8;color:#4a7fd6;border:1px solid rgba(74,127,214,.3);}
 
         /* ===== 编辑模式：字段可编辑 ===== */
         .info-card.editing .v{background:rgba(255,255,255,.92);border:1.5px dashed rgba(110,155,240,.65);
@@ -528,7 +528,7 @@
         .shot-card{width:min(88vw,380px);max-width:380px;}
         .shot-imgwrap{margin:6px 0 14px;border-radius:14px;overflow:hidden;background:#fff;
             border:1px solid rgba(150,190,255,.3);box-shadow:0 8px 26px rgba(50,100,180,.18),0 0 18px rgba(150,190,255,.2);}
-        .shot-imgwrap img{display:block;width:100%;height:auto;background:linear-gradient(160deg,#f2f7ff,#e7f0fb);
+        .shot-imgwrap img{display:block;width:100%;height:auto;background:#f7f8fa;
             animation:softIn .55s cubic-bezier(.22,1,.36,1) .12s backwards;}
         /* 功能圆键点按：柔光玻璃光晕从触点漾开 */
         .glow-press{position:relative;overflow:hidden;isolation:isolate;}
@@ -563,6 +563,12 @@
             backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
             box-shadow:0 2px 10px rgba(0,0,0,.08),0 1px 3px rgba(0,0,0,.05),inset 0 0 0 1px rgba(0,0,0,.06)!important;
             border:none!important;
+        }
+        .mbtn.primary{
+            background:#f2f4f8!important;
+            color:#4a7fd6!important;
+            border:1px solid rgba(74,127,214,.3)!important;
+            box-shadow:none!important;
         }
         .btn:active,.icon-btn:active,.fs-ctrl:active{transform:scale(.94);}
         /* 激活态：深蓝透色 */
