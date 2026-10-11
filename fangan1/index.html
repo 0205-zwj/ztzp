@@ -12,6 +12,25 @@
     <link rel="preload" as="script" href="lib/draco/draco_wasm_wrapper.js">
     <link rel="preload" as="fetch" href="lib/draco/draco_decoder.wasm" crossorigin>
     <script>
+      /* 闪黑根因修复：本地库把 WebGL 的 preserveDrawingBuffer 写死为 false（无配置项），
+         canvas 呈现后缓冲区即被清空，toDataURL 截出来是纯黑图 —— 快照盖顶就"闪黑一下"。
+         在库加载前给 getContext 打补丁强制开启缓冲保留，快照才能截到真实画面。
+         只改首次创建上下文的参数，之后立即还原，不影响其它 canvas。 */
+      (function(){
+        try{
+          const P = HTMLCanvasElement.prototype, orig = P.getContext;
+          P.getContext = function(type, attrs){
+            /* 持续注入（库会先建一个探测用 canvas，一次性劫持会被它消耗掉）：
+               所有 WebGL 上下文都开启缓冲保留，页面只有 model-viewer 一个 WebGL canvas，代价可忽略 */
+            if(type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl'){
+              attrs = Object.assign({}, attrs || {}, {preserveDrawingBuffer:true});
+            }
+            return orig.call(this, type, attrs);
+          };
+        }catch(e){}
+      })();
+    </script>
+    <script>
       /* 在模型库还在下载的同时，并行预取当前构件的 GLB —— 两者互不等待，首屏时间取较大值而非相加 */
       (function(){try{var q=new URLSearchParams(location.search).get('id');if(q&&/^[A-Za-z0-9_-]+$/.test(q)){var l=document.createElement('link');l.rel='preload';l.as='fetch';l.crossOrigin='anonymous';l.href='models/'+q+'.glb';document.head.appendChild(l);}}catch(e){}})();
     </script>
@@ -1007,8 +1026,24 @@ function preloadRest(){
     if(!window.partData) return;
     const mode = netProfile();
     if(mode === 'off') return;                                   /* 省流模式：一个都不预载 */
-    if(mode === 'cellular'){ preloadOne(nextPartUrl()); return; } /* 蜂窝：只预取下一个 */
-    Object.keys(partData).forEach(pid => preloadOne(partData[pid] && partData[pid].glbUrl));
+    /* 蜂窝：只预取下一个；WiFi：也只预取下一个，取完再顺延队列 ——
+       绝不并发全量下载：日志实测 4 个 GLB 并发曾和当前模型抢带宽，越预载越慢 */
+    const urls = [];
+    const start = Object.keys(partData).findIndex(k => String(k) === String(id));
+    const keys = start < 0 ? Object.keys(partData)
+        : Object.keys(partData).slice(start + 1).concat(Object.keys(partData).slice(0, Math.max(0, start)));
+    keys.forEach(k => { const u = partData[k] && partData[k].glbUrl; if(u && !glbCache[u]) urls.push(u); });
+    const limit = mode === 'cellular' ? 1 : urls.length;
+    let i = 0;
+    const next = () => {
+        while(i < urls.length && glbCache[urls[i]]) i++;
+        if(i >= urls.length || i >= limit) return;
+        const u = urls[i++];
+        fetch(u).then(r => r.ok ? r.blob() : null)
+            .then(b => { if(b) glbCache[u] = URL.createObjectURL(b); next(); })
+            .catch(()=>{ next(); });
+    };
+    next();
 }
 const idle = (fn, ms) => ('requestIdleCallback' in window) ? requestIdleCallback(fn, {timeout: ms||4000}) : setTimeout(fn, ms||1500);
 /* 热切换入口：更新 id → 改地址栏（可分享/返回） → 刷新信息 → 换模型 */
@@ -1392,7 +1427,15 @@ function captureGhost(src){
         });
         g.querySelectorAll('.toolbar,#loading,.tip-banner,.progress,.fs-dock,.fs-ctrl-layer').forEach(n=>n.remove());
         const r=src.getBoundingClientRect();
-        g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;';
+        g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;transform:none;transform-origin:center center;';
+        /* 若源元素此刻处于 CSS 横屏（盒已旋转 90°），克隆继承的 transform 会让快照二次旋转；
+           上面已清掉克隆旋转，这里把截图自身旋回 90° 并撑满视觉盒，画面与真实屏幕一致 */
+        if(src.style.transform && src.style.transform.indexOf('rotate') >= 0){
+            const cw = r.width, ch = r.height;
+            g.querySelectorAll('img.fs-shot').forEach(im=>{
+                im.style.cssText = 'position:absolute;left:' + ((cw-ch)/2) + 'px;top:' + ((ch-cw)/2) + 'px;width:' + ch + 'px;height:' + cw + 'px;object-fit:fill;transform:rotate(90deg);display:block;border:0;';
+            });
+        }
         document.body.appendChild(g);
         return g;
     }catch(e){ return null; }
@@ -1563,24 +1606,44 @@ function applyOrientation(){
     if(fsState.ctrl) fsState.ctrl.classList.toggle('fs-ls', css);
     fullWrap.classList.toggle('ls-card', css);
     try{ syncControls(); }catch(e){}
-    /* 横屏几何（修正版）：盒尺寸交换为 100vh×100vw（画布按横屏比例重建一次，模型适配横屏视野），
-       旋转只走 transform。之前 scale(vh/vw) 方向写反，把模型放大了约 4 倍且无法缩小 —— 本次修复。
-       尺寸交换放在动画起点一次完成，紧随其后的旋转动画掩盖交接帧，观感连贯 */
+    /* 横屏过渡（iOS 应用同款思路）：
+       之前"盒尺寸交换 + rotate 动画"同帧开跑，WebGL 画布重建会把动画头几帧顶住 = 点击卡顿；
+       现在改为：① 先暂停自旋再拍全屏快照盖顶（自旋不停，快照是静止的、底下画布还在转，
+       交叉淡化时两层角度对不上 = 你看到的"跳一下"）→ ② 快照底下瞬间切到横屏终态几何并重建画布
+       → ③ 快照交叉淡出，横屏画面从底下显现。
+       收尾只做"保角度重新取景"（半径适配新画布比例），绝不 resetCameraView 强扭视角。 */
+    holdSpin();
+    const g = captureGhost(el);
+    el.style.transition = 'none';
     el.style.transformOrigin = 'center center';
     if(css){
         el.style.left='50%'; el.style.top='50%';
         el.style.width='100vh'; el.style.height='100vw';
+        el.style.transform='translate(-50%,-50%) rotate(90deg)';
     } else {
         el.style.left='0px'; el.style.top='0px';
         el.style.width='100vw'; el.style.height='100vh';
+        el.style.transform='none';
     }
     void el.offsetHeight;
-    el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
-    el.style.transform = css ? 'translate(-50%,-50%) rotate(90deg)' : 'none';
+    try{ safeResize(); }catch(e){}   /* 画布重建在快照底下进行 */
+    if(g) fadeGhostOut(g, {dur: Math.round(ORI_MS*.8)});
     try{ resetGestureState(true); }catch(e){}
     showToast(want ? '横屏模式' : '竖屏模式');
-    /* 画布重建与相机复位放到旋转动画收尾之后，动画期间主线程零打扰 */
-    setTimeout(function(){ try{ safeResize(); }catch(e){} resetCameraView(); setTimeout(safeResize, 80); }, ORI_MS + 60);
+    /* 淡出收尾：保持当前 theta/phi 不变，仅让半径按新画布比例重新取景，然后恢复自旋 */
+    setTimeout(function(){
+        try{
+            const o = viewer.getCameraOrbit();
+            camPinned = false; framedR = null;
+            viewer.cameraOrbit = (o.theta/DEG).toFixed(2)+'deg '+(o.phi/DEG).toFixed(2)+'deg auto';
+            viewer.jumpCameraToGoal();
+        }catch(e){}
+        setTimeout(()=>{
+            try{ safeResize(); }catch(e){}
+            try{ ensureAbsRadius(); }catch(e){}
+            releaseSpin();
+        }, 140);
+    }, ORI_MS + 60);
 }
 function toggleLandscape(){
     if(!fsState || fsState.type !== 'model') return;
