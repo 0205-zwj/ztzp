@@ -1,325 +1,1614 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>中铁装配 钢结构构件信息</title>
-  <!-- model-viewer 依赖，保留你原来的CDN -->
-  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-  <style>
-    :root {
-      --ease-ios: cubic-bezier(0.25, 0.1, 0.25, 1); /* iOS原生动效曲线 */
-      --glass-blur: 8px;
-      --glass-bright: brightness(1.04);
-      --transition-normal: 0.32s var(--ease-ios);
-      --transition-quick: 0.24s var(--ease-ios);
-    }
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent; /* 去掉移动端点击灰块 */
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f7fafc;
-      color: #222;
-      overflow-x: hidden;
-    }
-    /* 页面外层容器，原始布局不动 */
-    .page-wrap {
-      width: 100%;
-      min-height: 100vh;
-      padding: 16px;
-    }
-    /* 3D模型容器【核心：全屏过渡优化，解决黑屏闪】 */
-    .model-box {
-      width: 100%;
-      min-height: 520px;
-      border-radius: 24px;
-      background: #edf4fb;
-      position: relative;
-      overflow: hidden;
-      /* 只给transform和opacity开过渡，其余属性不参与动画 */
-      transition: transform var(--transition-normal), opacity var(--transition-normal);
-      will-change: transform, opacity;
-    }
-    /* 全屏状态类：只缩放位移，不重绘页面结构 */
-    .model-box.fullscreen-mode {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      border-radius: 0;
-      z-index: 999;
-    }
-    /* 加载遮罩层 */
-    .loading-layer {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #edf4fb;
-      z-index: 2;
-      transition: opacity var(--transition-normal);
-    }
-    .loading-layer.fade-out {
-      opacity: 0;
-      pointer-events: none;
-    }
-    .loading-spinner {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      border: 3px solid rgba(110,160,220,0.2);
-      border-top-color: #4285d4;
-      animation: spin 1s linear infinite;
-      margin-bottom: 20px;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .loading-text {
-      font-size: 22px;
-      color: #2b5b99;
-      font-weight: 500;
-    }
-    .loading-subtext {
-      font-size: 15px;
-      color: #7a97b8;
-      margin: 8px 0 12px;
-    }
-    .loading-percent {
-      font-size: 48px;
-      color: #2b5b99;
-      font-weight: 600;
-    }
-    /* 右侧悬浮按钮组 */
-    .model-side-buttons {
-      position: absolute;
-      right: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      z-index: 3;
-    }
-    .side-btn {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.72);
-      backdrop-filter: var(--glass-blur) var(--glass-bright);
-      -webkit-backdrop-filter: var(--glass-blur) var(--glass-bright);
-      border: 1px solid rgba(255,255,255,0.85);
-      box-shadow: 0 4px 14px rgba(30, 70, 130, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      /* 只过渡transform，阴影不参与动画 */
-      transition: transform var(--transition-quick);
-    }
-    .side-btn:active {
-      transform: scale(0.92);
-    }
-    /* 构件信息卡片 */
-    .info-card {
-      margin-top: 16px;
-      width: 100%;
-      border-radius: 20px;
-      background: rgba(255,255,255,0.75);
-      backdrop-filter: var(--glass-blur) var(--glass-bright);
-      -webkit-backdrop-filter: var(--glass-blur) var(--glass-bright);
-      padding: 20px;
-      box-shadow: 0 3px 12px rgba(25,60,110,0.06);
-      transition: transform var(--transition-normal), opacity var(--transition-normal);
-    }
-    .info-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-    .info-card-title {
-      font-size: 22px;
-      font-weight: 600;
-      color: #203858;
-    }
-    .info-card-actions > button {
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.65);
-      border: 1px solid rgba(255,255,255,0.7);
-      transition: transform var(--transition-quick);
-    }
-    .info-card-actions > button:active {
-      transform: scale(0.9);
-    }
-    .info-row {
-      display: flex;
-      padding: 14px 0;
-      border-bottom: 1px solid rgba(180,200,225,0.25);
-    }
-    .info-row:last-child {
-      border-bottom: none;
-    }
-    .info-label {
-      width: 120px;
-      font-size: 17px;
-      color: #627894;
-    }
-    .info-value {
-      flex: 1;
-      font-size:17px;
-      color:#223652;
-    }
-    /* model-viewer 样式，关闭阴影减少性能开销 */
-    model-viewer {
-      width: 100%;
-      height: 100%;
-      position: absolute;
-      inset:0;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>中铁装配 钢结构构件信息</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%232563a8%22/><path d=%22M50 24 L76 38 L76 64 L50 78 L24 64 L24 38 Z%22 fill=%22none%22 stroke=%22white%22 stroke-width=%225%22 stroke-linejoin=%22round%22/><path d=%22M50 24 L50 51 M24 38 L50 51 L76 38 M50 51 L50 78%22 fill=%22none%22 stroke=%22white%22 stroke-width=%225%22 stroke-linejoin=%22round%22/></svg>">
+    <link rel="modulepreload" href="lib/model-viewer.min.js">
+    <link rel="preload" as="script" href="lib/draco/draco_wasm_wrapper.js">
+    <link rel="preload" as="fetch" href="lib/draco/draco_decoder.wasm" crossorigin>
+    <script>
+      /* 尽早（模型库尚未下载完时）并行预取当前构件 GLB，缩短首屏等待 */
+      (function(){try{var q=new URLSearchParams(location.search).get('id');if(q&&/^[A-Za-z0-9_-]+$/.test(q)){var l=document.createElement('link');l.rel='preload';l.as='fetch';l.crossOrigin='anonymous';l.href='models/'+q+'.glb';document.head.appendChild(l);}}catch(e){}})();
+    </script>
+    <script type="module" defer src="lib/model-viewer.min.js"></script>
+    <style>
+        /* 动效曲线：一律只减速、不回弹，贴近 ColorOS / OriginOS 的面板手感；
+           同时把光斑的尺寸/颜色/强度收敛成变量，鼠标与手指走不同取值 */
+        :root{
+            --e-settle:cubic-bezier(.32,.72,0,1);
+            --e-expo:cubic-bezier(.16,1,.3,1);
+            --e-leave:cubic-bezier(.5,0,.68,.3);
+            --gs:440px;--ga:1;--gc1:rgba(182,208,240,.15);--gc2:rgba(214,230,248,.09);
+        }
+        * {margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+        /* 触屏功能键：去除连点后残留的蓝色聚焦框/文本选中高亮（蓝方框盖图标），内部 SVG 不拦截点击、不可选中 */
+        .btn,.icon-btn,.fs-ctrl,.mbtn,.abtn,.model-item{
+            -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;
+        }
+        .btn:focus,.btn:focus-visible,.icon-btn:focus,.icon-btn:focus-visible,.fs-ctrl:focus,.fs-ctrl:focus-visible,
+        .mbtn:focus,.mbtn:focus-visible,.abtn:focus,.abtn:focus-visible,.model-item:focus{outline:none!important;}
+        .btn::-moz-focus-inner,.icon-btn::-moz-focus-inner,.fs-ctrl::-moz-focus-inner{border:0;padding:0;}
+        .btn svg,.icon-btn svg,.fs-ctrl svg,.mbtn svg,.abtn svg,.btn svg *,.icon-btn svg *,.fs-ctrl svg *{pointer-events:none;}
+        .fs-ctrl svg text,.btn svg text{user-select:none;-webkit-user-select:none;}
+        html,body{height:100%;overscroll-behavior:none;}
+        body {
+            background:linear-gradient(160deg,#fcfdfe 0%,#f5f9fc 52%,#f8f7fb 100%);
+            padding:14px;max-width:100%;margin:0 auto;
+            font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+            overflow-x:hidden;
+            animation:pageIn .5s cubic-bezier(.22,1,.36,1);
+        }
+        @keyframes pageIn {from{opacity:0;transform:translateY(12px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+        .glow {
+            position:fixed;left:0;top:0;width:var(--gs);height:var(--gs);border-radius:50%;
+            background:radial-gradient(circle,var(--gc1) 0%,var(--gc2) 40%,transparent 70%);
+            pointer-events:none;transform:translate(-50%,-50%);z-index:1;
+            opacity:0;transition:opacity .55s var(--e-settle),width .5s var(--e-settle),height .5s var(--e-settle);will-change:transform;
+        }
+        body.in-fs .glow{opacity:0!important;}
+        /* 鼠标轻悬 = 大范围柔光；按下 = 光斑收拢并提亮；触屏 = 小而聚的光团 */
+        .glow.press{width:calc(var(--gs)*.74);height:calc(var(--gs)*.74);--gc1:rgba(172,202,238,.22);--gc2:rgba(208,228,248,.12);}
+        @media (hover:none){:root{--gs:230px;--gc1:rgba(178,206,242,.19);--gc2:rgba(212,229,248,.10);}}
+        .header {
+            position:relative;z-index:2;
+            background:rgba(246,249,252,.6);
+            backdrop-filter:blur(36px) saturate(220%);
+            -webkit-backdrop-filter:blur(36px) saturate(220%);
+            color:#1e3a5f;padding:14px 16px;border-radius:22px;text-align:center;margin-bottom:10px;
+            box-shadow:0 8px 30px rgba(70,100,150,.08), 0 0 22px rgba(255,255,255,.7);
+            border:1px solid rgba(255,255,255,.85);
+            transition:opacity .35s ease;
+        }
+        .header h2 {font-size:17px;font-weight:600;letter-spacing:.5px;}
+        .header p {font-size:10px;opacity:.6;margin-top:4px;letter-spacing:2px;font-weight:400;}
+        .full-wrap {position:relative;z-index:2;width:100%;}
+        .model-container {
+            position:relative;width:100%;height:520px;
+            background:rgba(242,247,251,.5);
+            backdrop-filter:blur(46px) saturate(230%);
+            border-radius:26px;overflow:hidden;
+            box-shadow:0 16px 46px rgba(70,100,150,.09), 0 0 26px rgba(255,255,255,.65);
+            border:1px solid rgba(255,255,255,.85);
+            transition:box-shadow .35s ease,border-color .35s ease;
+        }
+        .model-container:hover{
+            border-color:rgba(198,214,240,.85);
+            box-shadow:0 20px 52px rgba(70,100,150,.10), 0 0 34px rgba(226,238,248,.8);
+        }
+        model-viewer {
+            width:100%;height:100%;
+            --poster-color:#f3f8fc;
+            touch-action:none;
+            interpolation-decay:0.12;
+            min-image-width:512;
+            camera-orbit:0deg 75deg auto;
+            camera-target:0m 0m 0m;
+            field-of-view:30deg;
+            min-field-of-view:5deg;
+            max-field-of-view:80deg;
+        }
+        model-viewer::part(ar-button),model-viewer::part(default-ar-button){display:none!important;}
+        .toolbar{
+            position:absolute;right:12px;top:50%;transform:translateY(-50%);z-index:20;
+            display:flex;flex-direction:column;gap:10px;align-items:center;
+            transition:opacity .3s ease;
+        }
+        .btn{
+            width:42px;height:42px;border-radius:50%;
+            background:linear-gradient(145deg,rgba(255,255,255,.84),rgba(224,238,252,.62));
+            backdrop-filter:blur(24px) saturate(220%);
+            -webkit-backdrop-filter:blur(24px) saturate(220%);
+            color:#2563a8;border:1px solid rgba(255,255,255,.94);
+            font-size:18px;cursor:pointer;
+            box-shadow:0 4px 14px rgba(50,100,180,.12),inset 0 1px 1px rgba(255,255,255,.92),0 0 0 1px rgba(150,190,255,.16),0 0 14px rgba(150,190,255,.24);
+            transition:transform .28s cubic-bezier(.32,.72,0,1),box-shadow .3s ease,background .25s ease;
+            display:flex;align-items:center;justify-content:center;
+        }
+        .btn:active{transform:scale(.9);transition:transform .11s ease-out;}
+        .btn:hover{border-color:#fff;box-shadow:0 6px 20px rgba(50,100,180,.2),inset 0 1px 1px #fff,0 0 0 1px rgba(150,190,255,.34),0 0 24px rgba(150,190,255,.55);}
+        .btn.active{background:linear-gradient(145deg,rgba(214,234,254,.98),rgba(184,214,248,.92));color:#1d5fae;border-color:rgba(255,255,255,1);box-shadow:0 0 0 2.5px rgba(123,168,240,.42),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 22px rgba(150,190,255,.6);animation:activeBreath 2.8s ease-in-out infinite;}
+        @keyframes activeBreath{0%,100%{box-shadow:0 0 0 2.5px rgba(123,168,240,.42),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 20px rgba(150,190,255,.5);}50%{box-shadow:0 0 0 2.5px rgba(123,168,240,.30),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 28px rgba(150,190,255,.72);}}
+        .tip-banner{
+            position:absolute;left:50%;transform:translateX(-50%) translateY(-8px);
+            top:20px;z-index:21;color:#2563a8;font-size:12px;
+            background:rgba(255,255,255,.85);backdrop-filter:blur(24px);
+            padding:8px 18px;border-radius:26px;white-space:nowrap;
+            box-shadow:0 8px 24px rgba(50,100,180,.15);
+            opacity:0;pointer-events:none;
+            transition:opacity .35s ease, transform .45s cubic-bezier(.22,1,.36,1);
+        }
+        .tip-banner.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+        .toast{
+            position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);
+            z-index:9300;color:#2563a8;font-size:14px;font-weight:500;
+            background:rgba(255,255,255,.92);backdrop-filter:blur(28px);
+            padding:14px 28px;border-radius:26px;
+            box-shadow:0 16px 48px rgba(50,100,180,.25);
+            opacity:0;pointer-events:none;
+            transition:opacity .3s ease, transform .35s cubic-bezier(.22,1,.36,1);
+        }
+        .toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+        .model-list{
+            position:fixed;left:0;right:0;bottom:0;z-index:9201;
+            display:flex;flex-direction:column;
+            height:52vh;max-height:70vh;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+            background:rgba(246,249,252,.85);
+            backdrop-filter:blur(40px) saturate(200%);-webkit-backdrop-filter:blur(40px) saturate(200%);
+            border-radius:28px 28px 0 0;border-top:1px solid rgba(255,255,255,.9);
+            transform:translateY(105%);transition:transform .56s var(--e-settle),height .42s var(--e-settle);
+            box-shadow:0 -14px 50px rgba(50,100,180,.28),0 0 40px rgba(140,180,255,.18);
+        }
+        .model-list.show{transform:translateY(0);}
+        .model-list .drag-handle{width:38px;height:4px;border-radius:2px;background:rgba(100,140,200,.28);margin:0 auto 10px;flex:0 0 auto;}
+        .ml-title{color:#1e3a5f;font-size:15px;font-weight:600;text-align:center;margin:0 0 10px;flex:0 0 auto;}
+        .ml-count{font-size:11px;font-weight:500;color:#6f93c8;background:rgba(123,168,240,.16);padding:2px 9px;border-radius:20px;margin-left:6px;vertical-align:1px;}
+        .ml-search{position:relative;flex:0 0 auto;margin:0 2px 10px;}
+        .ml-search input{width:100%;box-sizing:border-box;height:40px;border-radius:20px;border:1px solid rgba(255,255,255,.9);
+            background:rgba(255,255,255,.62);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+            padding:0 38px 0 38px;font-size:13px;color:#1e3a5f;outline:none;
+            box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 4px 14px rgba(50,100,180,.08);
+            transition:border-color .25s ease,box-shadow .25s ease,background .25s ease;}
+        .ml-search input::placeholder{color:#8aa6cc;}
+        .ml-search input:focus{border-color:rgba(123,168,240,.75);background:rgba(255,255,255,.82);
+            box-shadow:inset 0 1px 1px #fff,0 0 0 3px rgba(123,168,240,.18),0 0 18px rgba(150,190,255,.4);}
+        .ml-sicon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#7ea3d4;pointer-events:none;}
+        .ml-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;
+            border:none;background:rgba(120,155,210,.22);color:#5b86c0;display:grid;place-items:center;cursor:pointer;}
+        .ml-scroll{position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+            padding:2px 2px 6px;scrollbar-width:thin;scrollbar-color:rgba(123,168,240,.5) transparent;}
+        .ml-scroll::-webkit-scrollbar{width:5px;}
+        .ml-scroll::-webkit-scrollbar-thumb{background:rgba(123,168,240,.45);border-radius:3px;}
+        .ml-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;}
+        .ml-fade{position:absolute;left:0;right:0;height:22px;pointer-events:none;z-index:2;opacity:0;transition:opacity .25s ease;}
+        .ml-fade-bottom{bottom:0;background:linear-gradient(to top,rgba(236,243,250,.95),transparent);}
+        .ml-fade.on{opacity:1;}
+        .ml-empty{display:none;text-align:center;color:#8aa6cc;font-size:13px;padding:40px 0;}
+        .ml-empty.on{display:block;animation:softIn .35s ease backwards;}
+        .model-item{position:relative;overflow:hidden;
+            padding:8px 11px;border-radius:13px;cursor:pointer;
+            background:linear-gradient(150deg,rgba(255,255,255,.78),rgba(231,240,252,.6));
+            border:1px solid rgba(255,255,255,.92);
+            box-shadow:0 4px 14px rgba(50,100,180,.1),inset 0 1px 1px rgba(255,255,255,.9),0 0 0 1px rgba(150,190,255,.08);
+            opacity:0;transform:translateY(14px);
+            transition:opacity .38s ease,transform .24s var(--e-settle),box-shadow .26s ease,border-color .26s ease,background .26s ease;}
+        .model-list.show .model-item{opacity:1;transform:translateY(0);}
+        /* 按压：描边整体亮起一圈柔光环 + 边框发光扩散 */
+        .model-item.pressing{border-color:rgba(150,190,255,.95);transform:scale(.965);
+            box-shadow:0 0 0 2px rgba(123,168,240,.34),0 0 18px 3px rgba(150,190,255,.5),inset 0 1px 2px #fff;}
+        .model-item.fadeout{transition:box-shadow .5s ease,border-color .5s ease,transform .3s var(--e-settle);}
+        @media(hover:hover){.model-item:hover{transform:translateY(-2px);border-color:rgba(150,190,255,.75);
+            box-shadow:0 10px 26px rgba(50,100,180,.18),inset 0 1px 1px #fff,0 0 0 1px rgba(150,190,255,.3),0 0 22px rgba(150,190,255,.5);}}
+        .model-item:active{transform:scale(.96);transition-duration:.08s;}
+        .model-item.current{border-color:rgba(123,168,240,.85);
+            background:linear-gradient(150deg,rgba(225,238,255,.95),rgba(210,228,252,.78));
+            box-shadow:0 8px 22px rgba(50,100,180,.2),inset 0 1px 1px #fff,0 0 0 1.5px rgba(123,168,240,.55),0 0 20px rgba(140,180,255,.5);}
+        .model-item .cur-badge{position:absolute;top:6px;right:8px;font-size:9px;color:#fff;background:linear-gradient(135deg,#5b90e0,#2563a8);
+            padding:2px 7px;border-radius:10px;letter-spacing:.5px;box-shadow:0 3px 8px rgba(37,99,168,.4);}
+        .model-item .mid{color:#1e3a5f;font-size:12px;font-weight:600;padding-right:32px;line-height:1.3;}
+        .model-item .mname{color:#6088b8;font-size:9.5px;margin-top:2px;line-height:1.3;}
+        .model-item .mno{color:#8aa6cc;font-size:9px;margin-top:1px;letter-spacing:.2px;line-height:1.25;}
+        .model-mask{
+            position:fixed;inset:0;background:rgba(30,50,90,.2);z-index:9200;
+            opacity:0;pointer-events:none;transition:opacity .4s ease;
+            backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+        }
+        .model-mask.show{opacity:1;pointer-events:auto;}
+        .progress{position:absolute;top:0;left:0;width:100%;height:3px;background:rgba(160,200,240,.2);z-index:11;overflow:hidden;transition:opacity .4s ease;}
+        .progress.done{opacity:0;}
+        .bar{
+            height:100%;width:0%;
+            background:linear-gradient(90deg,#7ba8f0,#2563a8,#7ba8f0);
+            background-size:200% 100%;
+            box-shadow:0 0 10px rgba(123,168,240,.8);
+            transition:width .3s ease;
+            animation:barFlow 2s linear infinite;
+        }
+        @keyframes barFlow{0%{background-position:0% 0;}100%{background-position:200% 0;}}
+        .loading{
+            position:absolute;top:0;left:0;width:100%;height:100%;
+            background:rgba(228,237,247,.55);
+            backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+            display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;
+            transition:opacity .45s ease;
+        }
+        .loading-ring{position:relative;width:60px;height:60px;}
+        .loading-ring .ring{position:absolute;inset:0;border-radius:50%;border:3px solid transparent;}
+        .loading-ring .ring1{border-top-color:#2563a8;animation:spin 1s cubic-bezier(.5,.1,.5,.9) infinite;}
+        .loading-ring .ring2{inset:8px;border-width:2px;border-bottom-color:rgba(123,168,240,.6);animation:spinReverse 1.5s cubic-bezier(.5,.1,.5,.9) infinite;}
+        .loading-ring .ring3{inset:16px;border-width:2px;border-left-color:rgba(140,180,255,.4);animation:spin .8s linear infinite;}
+        @keyframes spinReverse{to{transform:rotate(-360deg);}}
+        .loading-text{font-size:14px;color:#2563a8;margin-top:20px;font-weight:500;letter-spacing:.5px;}
+        .loading-sub{font-size:11px;color:#7098c8;margin-top:6px;opacity:.7;}
+        .progress-percent{font-size:26px;font-weight:700;color:#2563a8;margin-top:10px;letter-spacing:-1px;}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .error{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,.92);flex-direction:column;align-items:center;justify-content:center;z-index:10;color:#557;}
+        .info-card{
+            background:rgba(246,249,252,.6);
+            backdrop-filter:blur(36px) saturate(220%);
+            -webkit-backdrop-filter:blur(36px) saturate(220%);
+            padding:18px;border-radius:26px;margin-top:14px;
+            display:flex;flex-direction:column;gap:9px;
+            box-shadow:0 12px 40px rgba(70,100,150,.07), 0 0 24px rgba(255,255,255,.6);
+            border:1px solid rgba(255,255,255,.85);
+            transition:opacity .4s ease, transform .45s cubic-bezier(.22,1,.36,1), box-shadow .35s ease, border-color .35s ease;
+        }
+        /* 整个信息卡外框：悬停泛起大范围柔紫蓝光晕（区别于小格局部光） */
+        .info-card:hover{
+            border-color:rgba(198,214,240,.85);
+            box-shadow:0 16px 48px rgba(60,92,140,.12), 0 0 40px rgba(202,220,244,.30), 0 0 24px rgba(206,224,246,.18);
+        }
+        .info-card h3{color:#1e3a5f;font-size:16px;margin-bottom:4px;padding-bottom:12px;border-bottom:1px solid rgba(50,100,180,.12);font-weight:600;}
+        .info-card .row{
+            position:relative;overflow:hidden;
+            display:flex;align-items:center;
+            padding:11px 14px;border-radius:12px;font-size:14px;line-height:1.5;
+            background:rgba(255,255,255,.5);
+            border:1px solid rgba(255,255,255,.75);
+            transition:box-shadow .3s ease,border-color .3s ease,background .3s ease;
+        }
+        .info-card .k{width:92px;color:#6088b8;flex-shrink:0;font-weight:400;}
+        .info-card .v{flex:1;color:#1e3a5f;word-break:break-all;font-weight:500;}
+        .footer{text-align:center;color:#7098c8;font-size:11px;margin-top:18px;line-height:1.7;transition:opacity .3s;}
+
+        /* ===== 全屏背景遮罩 ===== */
+        .fs-bg{
+            position:fixed;inset:0;z-index:8999;pointer-events:none;
+            background:
+                radial-gradient(1200px 820px at 72% -12%, rgba(190,216,242,.10), transparent 64%),
+                radial-gradient(1000px 720px at 8% 112%, rgba(210,205,234,.07), transparent 64%),
+                linear-gradient(160deg,#fefeff 0%,#f6fafc 52%,#f9f8fc 100%);
+            opacity:0;transition:opacity .5s cubic-bezier(.22,.61,.36,1);
+        }
+        /* ===== 进出场快照幽灵层：克隆当前画面做交叉淡化，模型用静态截图替换 ===== */
+        .fs-ghost *:not(.fs-shot){animation:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        .fs-ghost{box-sizing:border-box;will-change:opacity,filter,transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;}
+        .fs-ghost img{display:block;background:transparent;}
+        /* 纯 CSS 自动淡出：快照一旦插入即从首个合成帧柔化消散，不依赖 JS 帧（模型复位阻塞主线程/切后台也能跑），杜绝残影 */
+        .fs-ghost.fs-go{animation:fsGhostFade var(--gd,420ms) cubic-bezier(.33,0,.22,1) forwards!important;}
+        .fs-ghost.fs-go.down{animation-name:fsGhostFadeDn!important;}
+        .fs-ghost img.fs-shot{animation:fsGhostShot .22s cubic-bezier(.33,0,.3,1) forwards!important;}
+        @keyframes fsGhostFade{0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}34%{opacity:.55;filter:blur(3px);}100%{opacity:0;filter:blur(8px);transform:translateY(-3px) scale(.982);}}
+        @keyframes fsGhostFadeDn{0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}34%{opacity:.55;filter:blur(3px);}100%{opacity:0;filter:blur(8px);transform:translateY(4px) scale(.982);}}
+        @keyframes fsGhostShot{0%{opacity:1;filter:blur(0);transform:scale(1);}100%{opacity:0;filter:blur(16px);transform:scale(.982);}}
+        /* ===== 全屏控制按钮层 ===== */
+        .fs-ctrl-layer{position:fixed;inset:0;z-index:9100;pointer-events:none;}
+        .fs-ctrl{
+            position:absolute;width:46px;height:46px;border-radius:50%;
+            background:linear-gradient(145deg,rgba(255,255,255,.92),rgba(238,244,250,.62));backdrop-filter:blur(24px) saturate(170%);
+            -webkit-backdrop-filter:blur(24px) saturate(170%);
+            border:1px solid rgba(255,255,255,.88);
+            box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.7),0 0 16px rgba(255,255,255,.75),0 0 28px rgba(206,226,246,.22);
+            display:flex;align-items:center;justify-content:center;
+            cursor:pointer;color:#2563a8;pointer-events:auto;
+            opacity:0;transform:scale(.92) translateY(8px);
+            transition:opacity .42s var(--e-expo), transform .56s var(--e-settle), background .25s ease, color .25s ease,
+                       left .52s var(--e-settle), right .52s var(--e-settle), top .52s var(--e-settle), bottom .52s var(--e-settle);
+        }
+        .fs-ctrl.show{opacity:1;transform:scale(1) translateY(0);animation:ctrlGlow 5.6s ease-in-out .9s infinite;}
+        @keyframes ctrlGlow{
+            0%,100%{box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.65),0 0 14px rgba(255,255,255,.6),0 0 24px rgba(206,226,246,.18);}
+            50%{box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.85),0 0 22px rgba(255,255,255,.95),0 0 40px rgba(214,230,246,.30),0 0 60px rgba(220,234,248,.18);}
+        }
+        .fs-ctrl:active{transform:scale(.85);}
+        .fs-exit{top:calc(16px + env(safe-area-inset-top));left:16px;right:auto;bottom:auto;}
+        .fs-pagebtn,.fs-modelbtn{top:calc(16px + env(safe-area-inset-top));right:16px;left:auto;bottom:auto;}
+        .fs-rotate{bottom:calc(78px + env(safe-area-inset-bottom));right:16px;left:auto;top:auto;}
+        .fs-panbtn{bottom:calc(20px + env(safe-area-inset-bottom));right:16px;left:auto;top:auto;}
+        .fs-eye{top:calc(16px + env(safe-area-inset-top));right:70px;left:auto;bottom:auto;}
+        /* 构件全屏：360自由旋转按钮放在“隐藏构件信息(眼睛)”左侧，避免与左上角返回键重合 */
+        .fs-ctrl-layer > .fs-freebtn{top:calc(16px + env(safe-area-inset-top));right:124px;left:auto;bottom:auto;}
+        /* 横屏映射（内容顺旋90°，用户逆旋手机观看）：视觉左上=物理右上、视觉右上=物理右下、
+           视觉右下=物理左下、视觉左下=物理左上；按键图标同顺旋90°在视觉里保持正读 */
+        .fs-ctrl-layer.fs-ls .fs-ctrl.show{transform:rotate(90deg);}
+        .fs-ctrl-layer.fs-ls .fs-ctrl:active{transform:scale(.85) rotate(90deg);}
+        .fs-ls .fs-exit{top:16px;right:16px;left:auto;bottom:auto;}
+        .fs-ls .fs-pagebtn,.fs-ls .fs-modelbtn{top:auto;bottom:16px;right:16px;left:auto;}
+        .fs-ls .fs-rotate{bottom:16px;left:70px;top:auto;right:auto;}
+        .fs-ls .fs-panbtn{top:auto;bottom:16px;left:16px;right:auto;}
+        .fs-ls .fs-eye{top:auto;bottom:16px;right:16px;left:auto;}
+        .fs-ctrl-layer.fs-ls > .fs-freebtn{top:auto;bottom:16px;right:70px;left:auto;}
+        /* 横屏信息卡：顺旋90°贴视觉左下角（物理左上角），两列字段收成一小块，正读 */
+        .full-wrap.model-backdrop.ls-card .info-card{
+            top:0;left:0;right:auto;bottom:auto;
+            width:340px;max-height:none;
+            flex-direction:row;flex-wrap:wrap;align-items:center;
+            gap:2px 8px;padding:8px 12px;margin:0;border-radius:16px;
+            transform-origin:0 0;
+            transform:rotate(90deg) translateX(12px) translateY(calc(-100% - 12px));
+        }
+        .full-wrap.model-backdrop.ls-card .info-card .info-head{flex:0 0 100%;margin:0 0 1px;font-size:13px;padding:0;}
+        .full-wrap.model-backdrop.ls-card .info-card .row{flex:1 1 44%;min-width:0;padding:1px 4px;margin:0;border-bottom:none;font-size:10.5px;min-height:0;line-height:1.25;}
+        .full-wrap.model-backdrop.ls-card .info-card .row .k,.full-wrap.model-backdrop.ls-card .info-card .row .v{font-size:10.5px;}
+        .full-wrap.model-backdrop .info-card{transition:left .5s var(--e-settle),right .5s var(--e-settle),top .5s var(--e-settle),bottom .5s var(--e-settle),transform .54s var(--e-settle);}
+        /* 悬浮眼睛按钮：收起信息时显示小红点提示 */
+        .fs-eye .eye-badge{display:none;position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#e0566b;box-shadow:0 0 8px rgba(224,86,107,.8);}
+        .fs-eye.collapsed .eye-badge{display:block;}
+        .fs-ctrl.active{background:linear-gradient(145deg,rgba(206,229,252,.97),rgba(172,206,244,.92));color:#1d5fae;border-color:#fff;box-shadow:0 0 0 2.5px rgba(123,168,240,.4),0 6px 18px rgba(90,140,210,.25),0 0 22px rgba(150,190,255,.6);}
+        .icon-btn.active{color:#1d5fae;border-color:rgba(150,190,255,.9);background:linear-gradient(145deg,rgba(214,234,254,.98),rgba(184,214,248,.9));box-shadow:0 0 0 2px rgba(123,168,240,.35),0 0 16px rgba(150,190,255,.55);}
+        /* ===== 网页全屏右侧功能 dock：信息显示时偏小，眼睛隐藏信息后整体放大 ===== */
+        .fs-dock{position:absolute;right:12px;top:38%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;pointer-events:auto;transition:top .54s var(--e-settle),gap .45s var(--e-settle);}
+        .fs-ctrl-layer .fs-dock .fs-ctrl{position:relative;inset:auto;width:40px;height:40px;margin:0;font-size:18px;line-height:1;transition:opacity .42s var(--e-expo),transform .54s var(--e-settle),width .45s var(--e-settle),height .45s var(--e-settle),background .25s ease,color .25s ease;}
+        .fs-ctrl-layer .fs-dock .fs-ctrl svg{transition:width .45s var(--e-settle),height .45s var(--e-settle);}
+        .fs-ctrl-layer.fs-info-off .fs-dock{top:50%;gap:13px;}
+        .fs-ctrl-layer.fs-info-off .fs-dock .fs-ctrl{width:50px;height:50px;font-size:23px;}
+        .fs-ctrl{font-size:20px;line-height:1;}
+        /* 横竖屏：按键旋转与模型容器/信息卡共用同一时长与缓动，保持同步 */
+        .fs-ctrl-layer.fs-ls .fs-ctrl{transition:opacity .42s var(--e-expo),transform .54s var(--e-settle),background .25s ease,color .25s ease,left .54s var(--e-settle),right .54s var(--e-settle),top .54s var(--e-settle),bottom .54s var(--e-settle);}
+
+        /* ===== 整页全屏：flex 布局，模型自适应占满 ===== */
+        .full-wrap.fs-page{
+            display:flex;flex-direction:column;gap:8px;padding:8px;
+        }
+        .full-wrap.fs-page .model-container{
+            flex:1 1 auto;height:auto!important;min-height:0;border-radius:20px;
+            box-shadow:0 18px 54px rgba(70,100,150,.10), 0 0 34px rgba(255,255,255,.6);
+        }
+        .full-wrap.fs-page .info-card{
+            flex:0 0 auto;margin-top:0;
+            max-height:60vh;overflow:hidden;
+            padding:8px 11px 10px;border-radius:18px;
+            display:grid;grid-template-columns:1fr 1fr;gap:5px 9px;
+            transition:opacity .4s ease, max-height .48s cubic-bezier(.22,1,.36,1),
+                     padding .48s cubic-bezier(.22,1,.36,1),
+                     border-width .48s ease, margin .48s ease;
+            animation:fsCardIn .56s cubic-bezier(.22,1,.36,1) .12s backwards;
+        }
+        .full-wrap.fs-page .info-card h3{
+            grid-column:1/-1;font-size:12px;margin-bottom:0;padding-bottom:4px;
+        }
+        /* 全屏两列小格：纵向排版（其余外观沿用通用小格） */
+        .full-wrap.fs-page .info-card .row{
+            flex-direction:column;align-items:flex-start;gap:1px;
+            padding:4px 10px;border-radius:10px;line-height:1.25;
+        }
+        /* 悬停：只在小格边缘泛起一小圈雾蓝柔光（普通页与全屏通用） */
+        .info-card .row:hover{
+            border-color:rgba(158,188,228,.55);
+            background:rgba(255,255,255,.66);
+            box-shadow:0 0 10px rgba(145,178,230,.18),inset 0 0 8px rgba(190,210,240,.15);
+        }
+        .info-card .row .ripple{
+            position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;pointer-events:none;
+            background:radial-gradient(circle,rgba(255,255,255,.78) 0%,rgba(180,204,242,.32) 46%,transparent 70%);
+            transform:translate(-50%,-50%) scale(0);
+            animation:cellRipple .7s cubic-bezier(.22,1,.36,1) forwards;
+        }
+        /* 点击：外圈较大光晕，雾蓝带一点暖白，柔和不刺眼 */
+        .info-card .row.lit{
+            border-color:rgba(140,175,226,.7);background:rgba(255,255,255,.86);
+            box-shadow:0 0 0 1px rgba(160,190,232,.38),0 0 20px 4px rgba(150,180,230,.26),inset 0 0 12px rgba(198,214,242,.26);
+        }
+        @keyframes cellRipple{
+            0%{transform:translate(-50%,-50%) scale(0);opacity:.9;}
+            100%{transform:translate(-50%,-50%) scale(22);opacity:0;}
+        }
+        .model-container.fs-tap{
+            transition:box-shadow .32s ease;
+            box-shadow:0 0 0 2px rgba(145,178,228,.38),0 0 42px rgba(150,180,230,.28)!important;
+        }        .full-wrap.fs-page .model-container:hover{
+            border-color:rgba(198,214,240,.85);
+            box-shadow:0 22px 60px rgba(50,100,180,.2),0 0 48px rgba(150,168,242,.4);
+        }
+        @keyframes fsCardIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+        /* 退出全屏时信息卡先柔和淡出，避免两列小格被挤压变形 */
+        .full-wrap.fs-exiting .info-card{opacity:0!important;}
+        .full-wrap.fs-page .info-card .k{width:auto;font-size:9.5px;letter-spacing:.3px;}
+        .full-wrap.fs-page .info-card .v{font-size:12px;font-weight:600;width:100%;line-height:1.3;}
+        /* 标题行通栏：标题在左、复制/管理员/眼睛置最右；8 个字段整齐 2列×4行 */
+        .full-wrap.fs-page .info-card{grid-auto-rows:1fr;align-items:stretch;}
+        .full-wrap.fs-page .info-card .info-head{
+            grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;
+            padding-bottom:6px;margin-bottom:2px;border-bottom:1px solid rgba(50,100,180,.12);
+        }
+        .full-wrap.fs-page .info-card .info-head h3{grid-column:auto;font-size:13px;padding:0;border:none;margin:0;}
+        .full-wrap.fs-page .info-card .info-tools{margin-left:auto;}
+        .full-wrap.fs-page .info-card .row{justify-content:flex-start;}
+        #btnEyeInline{display:none;}
+        .full-wrap.fs-page #btnEyeInline{display:grid;}
+        .full-wrap.fs-page .info-card{transition:opacity .24s cubic-bezier(.25,.7,.35,1),max-height .22s cubic-bezier(.25,.7,.35,1),padding .22s cubic-bezier(.25,.7,.35,1),margin .22s cubic-bezier(.25,.7,.35,1),border-width .18s ease;}
+        .full-wrap.fs-page.info-collapsed .info-card{
+            max-height:0;opacity:0;padding-top:0;padding-bottom:0;
+            margin-top:0;border-width:0;pointer-events:none;}
+        /* 模型一键全屏：铺满无圆角 */
+        .model-container.fs-model{border-radius:0;border-width:0;}
+        .model-container.fs-model .toolbar{opacity:0;pointer-events:none;}
+        .model-container.fs-model .tip-banner{opacity:0!important;pointer-events:none!important;}
+        body.in-fs .toolbar{opacity:0!important;pointer-events:none!important;}
+        /* 模型一键全屏：构件信息做成与扫码页同款卡片，收成左下角毛玻璃小面板（模型在上可遮挡卡片） */
+        .full-wrap.model-backdrop .info-card{
+            position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9001;
+            width:min(320px,64vw);max-height:58vh;overflow:hidden;margin-top:0;padding:10px 12px 8px;gap:5px;
+            display:flex;flex-direction:column;border-radius:18px;
+            background:rgba(248,251,253,.62);border:1px solid rgba(255,255,255,.8);
+            box-shadow:-10px 16px 40px rgba(70,100,150,.09),0 0 22px rgba(255,255,255,.55);
+            backdrop-filter:blur(22px) saturate(180%)!important;-webkit-backdrop-filter:blur(22px) saturate(180%)!important;
+            -webkit-mask-image:linear-gradient(95deg,#000 0%,#000 55%,rgba(0,0,0,.62) 78%,transparent 100%),linear-gradient(#000 0,#000 calc(100% - 26px),transparent 100%);
+            -webkit-mask-composite:source-in;mask-composite:intersect;
+            mask-image:linear-gradient(95deg,#000 0%,#000 55%,rgba(0,0,0,.62) 78%,transparent 100%),linear-gradient(#000 0,#000 calc(100% - 26px),transparent 100%);
+            pointer-events:none;animation:miniCardIn .66s var(--e-settle) .16s backwards;
+        }
+        @supports ((mask-composite:intersect) or (-webkit-mask-composite:source-in)){
+            .full-wrap.model-backdrop .info-card{border-radius:18px 0 0 18px;border-right:none;}
+        }
+        @keyframes miniCardIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+        .full-wrap.model-backdrop .info-head{padding:2px 4px 6px;margin:0;background:transparent;border:none;box-shadow:none;pointer-events:none;}
+        .full-wrap.model-backdrop .info-head h3{font-size:13px;padding:0;border:none;margin:0;text-shadow:none;}
+        .full-wrap.model-backdrop .info-head .info-tools{display:none;}
+        .full-wrap.model-backdrop .info-card .row{
+            padding:5px 10px;border-radius:10px;font-size:12px;line-height:1.35;
+            background:rgba(255,255,255,.56);border:1px solid rgba(255,255,255,.74);box-shadow:none;gap:8px;
+        }
+        .full-wrap.model-backdrop .info-card .k{width:68px;min-width:0;font-size:11px;}
+        .full-wrap.model-backdrop .info-card .v{font-size:12px;font-weight:600;text-shadow:none;}
+        .full-wrap.model-backdrop .model-container{background:transparent;}
+        .full-wrap.model-backdrop.info-collapsed .info-card{opacity:0 !important;pointer-events:none;}
+        body.in-fs .full-wrap.model-backdrop .info-card{backdrop-filter:blur(18px) saturate(170%)!important;-webkit-backdrop-filter:blur(18px) saturate(170%)!important;}
+        body.in-fs .header,body.in-fs .footer{opacity:0;pointer-events:none;}
+        /* 全屏背景不透明，毛玻璃模糊无视觉作用且逐帧重算很贵，整段关闭以保证动画流畅 */
+        body.in-fs .model-container,
+        body.in-fs .info-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        body.in-fs .model-container{background:rgba(244,248,251,.5);}
+        body.in-fs .info-card{background:rgba(247,250,253,.62);}
+        /* 进/出全屏过渡只走 transform，提升为合成层，避免重排重绘卡顿 */
+        .full-wrap.fs-anim, .model-container.fs-anim{will-change:transform;}
+
+        /* ===== 信息卡标题行工具按钮（复制 / 管理员） ===== */
+        .info-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;padding-bottom:12px;border-bottom:1px solid rgba(50,100,180,.12);}
+        .info-head h3{margin:0;padding:0;border:none;}
+        .info-tools{display:flex;gap:8px;}
+        .icon-btn{width:32px;height:32px;border-radius:10px;border:1px solid rgba(255,255,255,.85);
+            background:rgba(255,255,255,.55);color:#5b86c0;display:grid;place-items:center;cursor:pointer;
+            box-shadow:0 4px 12px rgba(60,110,190,.1),0 0 10px rgba(150,190,255,.18);
+            transition:box-shadow .28s ease,border-color .28s ease,background .28s ease,transform .15s ease;}
+        .icon-btn:hover{border-color:rgba(158,188,228,.7);background:rgba(255,255,255,.75);
+            box-shadow:0 0 12px rgba(145,178,230,.28),inset 0 0 8px rgba(190,210,240,.18);}
+        .icon-btn:active{transform:scale(.92);}
+
+        /* ===== 管理员密码弹窗 ===== */
+        .modal-mask{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;
+            background:rgba(40,70,130,.28);backdrop-filter:blur(10px) saturate(160%);-webkit-backdrop-filter:blur(10px) saturate(160%);
+            opacity:0;pointer-events:none;transition:opacity .32s ease;padding:24px;}
+        .modal-mask.show{opacity:1;pointer-events:auto;}
+        .modal-card{width:100%;max-width:340px;background:rgba(238,246,255,.92);border:1px solid rgba(255,255,255,.9);
+            border-radius:22px;padding:24px 22px 20px;box-shadow:0 24px 70px rgba(40,80,150,.32);
+            transform:translateY(18px) scale(.96);transition:transform .38s cubic-bezier(.22,1,.36,1);}
+        .modal-mask.show .modal-card{transform:translateY(0) scale(1);}
+        .modal-title{font-size:17px;font-weight:700;color:#1e3a5f;}
+        .modal-sub{font-size:12.5px;color:#6f93c2;margin-top:5px;line-height:1.5;}
+        .modal-input{width:100%;box-sizing:border-box;margin-top:16px;height:46px;border-radius:13px;border:1.5px solid rgba(120,160,225,.4);
+            background:rgba(255,255,255,.85);padding:0 14px;font-size:16px;color:#1e3a5f;letter-spacing:2px;outline:none;
+            transition:border-color .25s ease,box-shadow .25s ease;}
+        .modal-input:focus{border-color:rgba(110,155,240,.85);box-shadow:0 0 0 3px rgba(130,170,240,.18);}
+        .modal-err{height:18px;margin-top:8px;font-size:12.5px;color:#e0566b;opacity:0;transition:opacity .2s;}
+        .modal-err.show{opacity:1;}
+        .modal-card.shake{animation:modalShake .4s ease;}
+        @keyframes modalShake{0%,100%{transform:translateX(0);}20%,60%{transform:translateX(-8px);}40%,80%{transform:translateX(8px);}}
+        .modal-btns{display:flex;gap:10px;margin-top:6px;}
+        .mbtn{flex:1;height:44px;border-radius:13px;border:none;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .25s,background .25s;}
+        .mbtn:active{transform:scale(.96);}
+        .mbtn.ghost{background:rgba(255,255,255,.7);color:#5b86c0;border:1px solid rgba(120,160,225,.35);}
+        .mbtn.primary{background:linear-gradient(135deg,#5b93e6,#4a7fd6);color:#fff;box-shadow:0 8px 20px rgba(80,130,220,.35);}
+
+        /* ===== 编辑模式：字段可编辑 ===== */
+        .info-card.editing .v{background:rgba(255,255,255,.92);border:1.5px dashed rgba(110,155,240,.65);
+            border-radius:8px;padding:2px 8px;margin:-2px 0;min-height:20px;cursor:text;outline:none;
+            transition:border-color .2s,box-shadow .2s;}
+        .info-card.editing .v:focus{border-style:solid;border-color:#4a7fd6;box-shadow:0 0 0 3px rgba(130,170,240,.2);}
+        .info-card.editing .row[data-lock="1"] .v{border-color:transparent;background:transparent;cursor:default;box-shadow:none;}
+        .admin-bar{position:fixed;left:50%;bottom:18px;transform:translate(-50%,140%);z-index:9520;
+            display:flex;gap:8px;max-width:calc(100vw - 24px);padding:10px;border-radius:18px;
+            background:rgba(238,246,255,.9);border:1px solid rgba(255,255,255,.9);
+            backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+            box-shadow:0 18px 50px rgba(40,80,150,.3);opacity:0;pointer-events:none;
+            transition:transform .42s cubic-bezier(.22,1,.36,1),opacity .3s ease;}
+        .admin-bar.show{transform:translate(-50%,0);opacity:1;pointer-events:auto;}
+        .abtn{border:none;white-space:nowrap;height:40px;padding:0 15px;border-radius:11px;font-size:13.5px;font-weight:600;cursor:pointer;
+            background:linear-gradient(135deg,#5b93e6,#4a7fd6);color:#fff;box-shadow:0 6px 14px rgba(80,130,220,.3);transition:transform .15s;}
+        .abtn:active{transform:scale(.94);}
+        .abtn.ghost{background:rgba(255,255,255,.8);color:#5b86c0;box-shadow:none;border:1px solid rgba(120,160,225,.3);}
+        body.editing{padding-bottom:96px;}
+        .admin-bar{flex-wrap:wrap;justify-content:center;}
+        .admin-bar{flex-wrap:nowrap;gap:6px;padding:8px;}
+        .admin-bar .abtn{height:38px;padding:0 12px;font-size:13px;}
+
+        /* 保存模型图片弹窗 */
+        .shot-card{width:min(88vw,380px);max-width:380px;}
+        .shot-imgwrap{margin:6px 0 14px;border-radius:14px;overflow:hidden;background:#fff;
+            border:1px solid rgba(150,190,255,.3);box-shadow:0 8px 26px rgba(50,100,180,.18),0 0 18px rgba(150,190,255,.2);}
+        .shot-imgwrap img{display:block;width:100%;height:auto;background:linear-gradient(160deg,#f2f7ff,#e7f0fb);
+            animation:softIn .55s cubic-bezier(.22,1,.36,1) .12s backwards;}
+        /* 功能圆键点按：柔光玻璃光晕从触点漾开 */
+        .glow-press{position:relative;overflow:hidden;isolation:isolate;}
+        .fs-ctrl.glow-press{position:absolute;}
+        .glow-press>svg,.glow-press>span{position:relative;z-index:2;}
+        .glow-press .gp-ripple{position:absolute;border-radius:50%;pointer-events:none;z-index:1;
+            background:radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(170,200,245,.55) 42%,rgba(170,200,245,0) 72%);
+            transform:translate(-50%,-50%) scale(0);animation:gpWave .6s cubic-bezier(.22,1,.36,1) forwards;}
+        @keyframes gpWave{0%{opacity:.9;transform:translate(-50%,-50%) scale(0);}100%{opacity:0;transform:translate(-50%,-50%) scale(1);}}
+        /* ===== 柔和散入/飞入（iOS / 澎湃 / ColorOS 手感） ===== */
+        @keyframes softIn{from{opacity:0;transform:translateY(16px) scale(.97);filter:blur(8px);}to{opacity:1;transform:none;filter:blur(0);}}
+        .modal-mask.show .modal-title{animation:softIn .5s cubic-bezier(.22,1,.36,1) .06s backwards;}
+        .modal-mask.show .modal-sub{animation:softIn .5s cubic-bezier(.22,1,.36,1) .11s backwards;}
+        .modal-mask.show .modal-input{animation:softIn .5s cubic-bezier(.22,1,.36,1) .16s backwards;}
+        .modal-mask.show .modal-btns{animation:softIn .5s cubic-bezier(.22,1,.36,1) .3s backwards;}
+        .toast{transition:opacity .32s ease,transform .46s cubic-bezier(.32,.72,0,1);}
+        .model-list.show .drag-handle{animation:softIn .5s cubic-bezier(.22,1,.36,1) .03s backwards;}
+        .model-list.show .ml-title{animation:softIn .5s cubic-bezier(.22,1,.36,1) .07s backwards;}
+        .admin-bar.show{animation:barIn .5s cubic-bezier(.32,.72,0,1) both;}
+        @keyframes barIn{from{opacity:0;transform:translate(-50%,26px);}to{opacity:1;transform:translate(-50%,0);}}
+    </style>
 </head>
 <body>
-  <div class="page-wrap">
-    <!-- 3D模型容器 -->
-    <div class="model-box" id="modelContainer">
-      <model-viewer
-        id="modelViewer"
-        src="你的模型.glb"
-        alt="钢结构构件"
-        shadow-intensity="0"
-        auto-rotate
-        camera-controls
-        touch-action="none"
-      ></model-viewer>
-
-      <!-- 加载层 -->
-      <div class="loading-layer" id="loadingLayer">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">正在加载3D模型</div>
-        <div class="loading-subtext">正在下载模型数据...</div>
-        <div class="loading-percent" id="percentText">0%</div>
-      </div>
-
-      <!-- 右侧工具栏 -->
-      <div class="model-side-buttons">
-        <button class="side-btn" id="btnReset">🔄</button>
-        <button class="side-btn" id="btnHand">✋</button>
-        <button class="side-btn" id="btn360">360</button>
-        <button class="side-btn" id="btnTarget">🎯</button>
-        <button class="side-btn" id="btnFullscreen">⛶</button>
-        <button class="side-btn" id="btnScreen">🖥️</button>
-        <button class="side-btn" id="btnSwitch">🔀</button>
-        <button class="side-btn" id="btnCapture">📷</button>
-      </div>
+<div class="glow" id="glow"></div>
+<div class="toast" id="toast">✅</div>
+<div class="modal-mask" id="adminMask">
+    <div class="modal-card" id="adminCard">
+        <div class="modal-title">管理员验证</div>
+        <div class="modal-sub">请输入管理密码，验证后可在线修改本构件的基本信息</div>
+        <input type="password" id="adminPwd" class="modal-input" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="请输入密码" />
+        <div class="modal-err" id="adminErr">密码不正确，请重新输入</div>
+        <div class="modal-btns">
+            <button class="mbtn ghost" id="adminCancel">取消</button>
+            <button class="mbtn primary" id="adminOk">确认</button>
+        </div>
     </div>
-
-    <!-- 构件信息卡片 -->
-    <div class="info-card">
-      <div class="info-card-header">
-        <h2 class="info-card-title">构件基本信息</h2>
-        <div class="info-card-actions">
-          <button></button>
-          <button></button>
-          <button></button>
+</div>
+<div class="admin-bar" id="adminBar">
+    <button class="abtn" id="adminSave">保存修改</button>
+    <button class="abtn ghost" id="adminExport">导出 data.js</button>
+    <button class="abtn ghost" id="adminClear">还原</button>
+    <button class="abtn ghost" id="adminDone">完成</button>
+</div>
+<!-- 保存模型图片预览 -->
+    <div class="modal-mask" id="shotMask">
+      <div class="modal-card shot-card">
+        <div class="modal-title">构件模型图</div>
+        <div class="modal-sub">微信里长按图片可保存到相册；电脑端点“保存到本地”</div>
+        <div class="shot-imgwrap"><img id="shotImg" alt="构件模型图片"/></div>
+        <div class="modal-btns">
+          <button class="mbtn ghost" id="shotClose">关闭</button>
+          <button class="mbtn primary" id="shotSave">保存到本地</button>
         </div>
       </div>
-      <div class="info-row">
-        <div class="info-label">构件编号</div>
-        <div class="info-value">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">加工号</div>
-        <div class="info-value">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">项目名称</div>
-        <div class="info-value">-</div>
-      </div>
     </div>
-  </div>
-
-  <script>
-    // 获取DOM元素
-    const modelContainer = document.getElementById('modelContainer');
-    const loadingLayer = document.getElementById('loadingLayer');
-    const percentText = document.getElementById('percentText');
-    const modelViewer = document.getElementById('modelViewer');
-    const btnFullscreen = document.getElementById('btnFullscreen');
-
-    // ========== 模型加载进度逻辑（原样保留，优化动画） ==========
-    modelViewer.addEventListener('progress', (e) => {
-      const progress = Math.round(e.detail.totalProgress * 100);
-      percentText.textContent = `${progress}%`;
-      if(progress >= 100){
-        // 加载完成平滑淡出加载层
-        loadingLayer.classList.add('fade-out');
-        setTimeout(()=>{
-          loadingLayer.style.display = 'none';
-        },320);
-      }
+<div class="header">
+    <h2>中铁装配｜钢结构构件信息</h2>
+    <p>CHINA RAILWAY ASSEMBLY</p>
+</div>
+<div class="full-wrap" id="fullWrap">
+    <div class="model-container" id="modelContainer">
+        <div class="progress"><div class="bar" id="bar"></div></div>
+        <model-viewer id="viewer" alt="构件3D模型" loading="eager" shadow-intensity="0.3" camera-controls interaction-prompt="auto" min-camera-orbit="auto 0deg auto" max-camera-orbit="auto 180deg auto" min-field-of-view="5deg" max-field-of-view="80deg" exposure="1" tone-mapping="neutral"></model-viewer>
+        <div class="toolbar" id="toolbar">
+            <button class="btn" id="btnRotate" title="自动旋转">🔄</button>
+            <button class="btn" id="btnPan" title="移动模式（单指拖移）">✋</button>
+            <button class="btn" id="btnFree" title="360°自由旋转（上下可翻转）"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.6"/><path d="M12.9 2.3 L10.3 2.3 L11.2 4.2 Z" fill="currentColor" stroke="none"/><path d="M21.7 11.1 L21.7 13.7 L19.8 12.6 Z" fill="currentColor" stroke="none"/><path d="M11.1 21.7 L13.7 21.7 L12.8 19.8 Z" fill="currentColor" stroke="none"/><path d="M2.3 12.9 L2.3 10.3 L4.2 11.2 Z" fill="currentColor" stroke="none"/><text x="12" y="15.9" text-anchor="middle" font-family="system-ui,Arial" font-weight="800" font-size="8.8" fill="currentColor" stroke="none" letter-spacing="-.5">360</text></svg></button>
+            <button class="btn" id="btnReset" title="重置视角">🎯</button>
+            <button class="btn" id="btnFull" title="整页全屏">⛶</button>
+            <button class="btn" id="btnModelFull" title="模型占满全屏">🖥️</button>
+            <button class="btn" id="btnSwitch" title="切换构件">🔀</button>
+            <button class="btn" id="btnMini" title="保存模型图片"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.4-2.2h7.2L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.4" r="3.3"/></svg></button>
+        </div>
+        <div class="tip-banner" id="tipBanner">💡拖动旋转360度查看模型</div>
+        <div class="loading" id="loading">
+            <div class="loading-ring">
+                <div class="ring ring1"></div>
+                <div class="ring ring2"></div>
+                <div class="ring ring3"></div>
+            </div>
+            <div class="loading-text">正在加载3D模型</div>
+            <div class="loading-sub" id="loadingSub">正在下载模型数据…</div>
+            <div class="progress-percent" id="percent">0%</div>
+        </div>
+        <div class="error" id="error"><p>3D模型加载失败，请检查网络刷新</p></div>
+    </div>
+    <div class="info-card" id="infoCard">
+        <div class="info-head">
+            <h3>构件基本信息</h3>
+            <div class="info-tools">
+<button class="icon-btn" id="btnEyeInline" title="隐藏/显示信息" aria-label="隐藏信息"></button>
+                <button class="icon-btn" id="btnCopy" title="复制构件信息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <button class="icon-btn" id="btnAdmin" title="管理员入口"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+            </div>
+        </div>
+        <div class="row"><div class="k">构件编号</div><div class="v" id="partId">-</div></div>
+        <div class="row"><div class="k">加工号</div><div class="v" id="workNo">-</div></div>
+        <div class="row"><div class="k">项目名称</div><div class="v" id="projectName">-</div></div>
+        <div class="row"><div class="k">分部工程</div><div class="v" id="section">-</div></div>
+        <div class="row"><div class="k">构件类型</div><div class="v" id="partType">-</div></div>
+        <div class="row"><div class="k">材质</div><div class="v" id="material">-</div></div>
+        <div class="row"><div class="k">规格</div><div class="v" id="spec">-</div></div>
+        <div class="row"><div class="k">数量</div><div class="v" id="quantity">-</div></div>
+    </div>
+</div>
+<div class="model-mask" id="modelMask"></div>
+<div class="model-list" id="modelList">
+    <div class="drag-handle"></div>
+    <h3 class="ml-title">选择要查看的构件 <span class="ml-count" id="modelCount"></span></h3>
+    <div class="ml-search">
+        <svg class="ml-sicon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input id="modelSearch" type="search" placeholder="搜索编号 / 加工号 / 类型 / 材质" aria-label="搜索构件"/>
+        <button class="ml-clear" id="modelSearchClear" aria-label="清空" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+        </button>
+    </div>
+    <div class="ml-scroll">
+        <div id="modelItems" class="ml-grid"></div>
+        <div class="ml-empty" id="modelEmpty">未找到匹配的构件</div>
+        <div class="ml-fade ml-fade-bottom"></div>
+    </div>
+</div>
+<p class="footer">中铁装配 · 钢结构构件一物一码系统<br>制作人：赵文杰&nbsp;&nbsp;·&nbsp;&nbsp;负责人：常建佳</p>
+<script src="data.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const id = new URLSearchParams(location.search).get('id');
+const viewer = $('#viewer'), loading = $('#loading'), bar = $('#bar'), percent = $('#percent'),
+error = $('#error'), fullWrap = $('#fullWrap'), btnFull = $('#btnFull'), btnModelFull = $('#btnModelFull'),
+btnRotate = $('#btnRotate'), btnReset = $('#btnReset'), infoCard = $('#infoCard'), tipBanner = $('#tipBanner'),
+glow = $('#glow'), btnSwitch = $('#btnSwitch'), toast = $('#toast'), modelContainer = $('#modelContainer'),
+btnPan = $('#btnPan');
+const btnFree = $('#btnFree');
+let rotate = false, tipTimer = null, retryCount = 0;
+const fields = ['partId','workNo','projectName','section','partType','material','spec','quantity'];
+/* 管理员在本机保存的修改：渲染前合并到数据（仅保存在本设备浏览器，导出 data.js 才能同步到线上） */
+const OV_KEY = 'gangjiegou_overrides_v1';
+function loadOverrides(){
+    try{
+        const ov = JSON.parse(localStorage.getItem(OV_KEY) || '{}');
+        Object.keys(ov).forEach(k => { if(window.partData && partData[k]) Object.assign(partData[k], ov[k]); });
+    }catch(e){}
+}
+loadOverrides();
+if(id && window.partData && partData[id]){
+    const d = partData[id];
+    fields.forEach(f => {const el = $(`#${f}`); if(el && d[f]) el.innerText = d[f];});
+    viewer.src = d.glbUrl;
+    viewer.autoRotateSpeed = 5;
+    /* 进页面即自旋；一旦用户手势操控自动暂停，🔄 按钮可随时开关 */
+    viewer.autoRotate = true; rotate = true;
+    if(btnRotate) btnRotate.classList.add('active');
+    viewer.addEventListener('camera-change', e => {
+        if(e.detail && e.detail.source === 'user-interaction' && rotate){
+            rotate = false; viewer.autoRotate = false;
+            btnRotate.classList.remove('active');
+        }
     });
+    viewer.addEventListener('progress', e => {
+        if(e.total){
+            const p = Math.round(e.loaded/e.total*100);
+            bar.style.width = p + '%'; percent.innerText = p + '%';
+            const sub = $('#loadingSub');
+            if(p < 30) sub.innerText = '正在下载模型数据…';
+            else if(p < 70) sub.innerText = '正在传输模型文件…';
+            else if(p < 95) sub.innerText = '正在解析模型…';
+            else sub.innerText = '即将完成…';
+        }
+    });
+    viewer.addEventListener('load', () => {
+        bar.style.width = '100%'; percent.innerText = '100%';
+        $('#loadingSub').innerText = '加载完成';
+        setTimeout(()=>{
+            loading.style.opacity = '0';
+            setTimeout(()=>{ loading.style.display = 'none'; }, 450);
+            document.querySelector('.progress').classList.add('done');
+            tipBanner.classList.add('show');
+            tipTimer = setTimeout(()=>tipBanner.classList.remove('show'), 5000);
+        }, 300);
+    });
+    viewer.addEventListener('error', () => {
+        if(retryCount < 1){retryCount++; setTimeout(()=>{viewer.src = partData[id].glbUrl;}, 1000);}
+        else {loading.style.display='none'; error.style.display='flex';}
+    });
+}else{
+    document.querySelector('.header h2').innerText = '构件信息未找到';
+    modelContainer.style.display = 'none'; loading.style.display = 'none';
+}
+let glowRAF = null;
+function moveGlow(x,y){
+    if(glowRAF) return;
+    glowRAF = requestAnimationFrame(()=>{
+        glow.style.transform = 'translate(' + x + 'px,' + y + 'px) translate(-50%,-50%)';
+        glow.style.opacity = '1'; glowRAF = null;
+    });
+}
+document.addEventListener('pointermove', e => { if(e.pointerType !== 'touch') moveGlow(e.clientX, e.clientY); }, {passive:true});
+document.addEventListener('pointerdown', e => { glow.classList.add('press'); moveGlow(e.clientX, e.clientY); }, {passive:true});
+document.addEventListener('pointerup', e => { glow.classList.remove('press'); if(e.pointerType === 'touch') glow.style.opacity = '0'; }, {passive:true});
+document.addEventListener('pointercancel', () => glow.classList.remove('press'), {passive:true});
+document.addEventListener('mouseleave', () => { glow.style.opacity = '0'; glow.classList.remove('press'); });
+btnRotate.onclick = () => { if(!rotate && freeMode){ try{ setFreeMode(false); }catch(e){} } rotate = !rotate; viewer.autoRotate = rotate; btnRotate.classList.toggle('active', rotate); }
+btnReset.onclick = () => { camPinned=false; viewer.cameraOrbit = "0deg 75deg auto"; viewer.cameraTarget = "0m 0m 0m"; viewer.jumpCameraToGoal(); try{ resetFree(); }catch(e){} setTimeout(ensureAbsRadius,320); }
+let clickCount = 0, clickTimer = null;
+viewer.addEventListener('click', (e) => {
+    clickCount++; clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+        if(clickCount === 3){
+            const p = e.intersectionPoint;
+            if(p){ viewer.cameraTarget = `${p.x}m ${p.y}m ${p.z}m`; showToast("已定位到该点"); }
+        }
+        clickCount = 0;
+    }, 350);
+});
+function showToast(msg, duration = 1800){
+    toast.innerText = msg; toast.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(()=>toast.classList.remove('show'), duration);
+}
+const modelList = $('#modelList'), modelMask = $('#modelMask'), modelItems = $('#modelItems'),
+      modelSearch=$('#modelSearch'), modelSearchClear=$('#modelSearchClear'), modelCount=$('#modelCount'),
+      modelEmpty=$('#modelEmpty'), mlScroll=document.querySelector('#modelList .ml-scroll'),
+      mlFadeBottom=document.querySelector('#modelList .ml-fade-bottom');
+function closeModelList(){
+    modelItems.querySelectorAll('.model-item').forEach(it=>it.style.transitionDelay='0s');
+    modelList.classList.remove('show'); modelMask.classList.remove('show');
+}
+function renderModelList(kw){
+    kw=(kw||'').trim().toLowerCase();
+    modelItems.innerHTML=''; let n=0;
+    Object.keys(partData).forEach(pid=>{
+        const d=partData[pid];
+        const hay=[d.partId,d.workNo,d.projectName,d.section,d.partType,d.material,d.spec,d.quantity].filter(Boolean).join(' ').toLowerCase();
+        if(kw && hay.indexOf(kw)===-1) return;
+        const item=document.createElement('div');
+        const isCur=String(pid)===String(id);
+        item.className='model-item glow-press'+(isCur?' current':'');
+        item.style.transitionDelay=Math.min(n,10)*0.035+'s';
+        item.innerHTML=(isCur?'<span class="cur-badge">当前</span>':'')
+            +'<div class="mid">构件编号：'+(d.partId||pid)+'</div>'
+            +'<div class="mname">'+(d.projectName||'')+' · '+(d.partType||'')+'</div>'
+            +(d.workNo?'<div class="mno">加工号 '+d.workNo+'</div>':'');
+        item.onclick=()=>{ closeModelList(); setTimeout(()=>{ location.href=location.pathname+'?id='+pid; },260); };
+        item.addEventListener('pointerdown',()=>{ item.classList.remove('fadeout'); item.classList.add('pressing'); });
+        ['pointerup','pointercancel','pointerleave'].forEach(ev=>item.addEventListener(ev,()=>{ if(item.classList.contains('pressing')){ item.classList.remove('pressing'); item.classList.add('fadeout'); setTimeout(()=>item.classList.remove('fadeout'),500); } }));
+        bindGlowPress(item);
+        modelItems.appendChild(item); n++;
+    });
+    modelEmpty.classList.toggle('on',n===0);
+    if(modelList.classList.contains('show')) fitModelListHeight(n);
+    requestAnimationFrame(updateMlFade);
+}
+function updateMlFade(){ if(!mlScroll)return; mlFadeBottom.classList.toggle('on', mlScroll.scrollTop+mlScroll.clientHeight < mlScroll.scrollHeight-8); }
+/* 面板高度按构件数量自适应：行少贴内容、行多封顶约半屏，再多交给内部滚动 */
+const ML_TOP = 100;   /* 握把 + 标题 + 搜索框 + 内边距 */
+const ML_ROW = 74;    /* 压扁后单元格高度 + 间距 */
+function fitModelListHeight(n){
+    const cols = Math.max(1, Math.round(modelItems.clientWidth / 136)) || 2;
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const h = ML_TOP + rows * ML_ROW + 10;
+    /* 半屏封顶、内部滚动为主；构件非常多（≥15）才放宽到 2/3 屏 */
+    const cap = window.innerHeight * (n >= 15 ? .66 : .5);
+    modelList.style.height = Math.round(Math.max(230, Math.min(h, cap))) + 'px';
+}
+function openModelList(){
+    modelSearch.value=''; modelSearchClear.style.display='none';
+    const n = Object.keys(partData).length;
+    modelCount.textContent='共 '+n+' 个';
+    renderModelList(''); mlScroll.scrollTop=0;
+    fitModelListHeight(n);
+    modelList.classList.add('show'); modelMask.classList.add('show');
+}
+btnSwitch.onclick=openModelList;
+modelMask.onclick=closeModelList;
+modelSearch.addEventListener('input',e=>{ modelSearchClear.style.display=e.target.value?'grid':'none'; renderModelList(e.target.value); });
+modelSearchClear.onclick=()=>{ modelSearch.value=''; modelSearchClear.style.display='none'; renderModelList(''); };
+mlScroll.addEventListener('scroll',updateMlFade,{passive:true});
+window.addEventListener('resize',updateMlFade);
+tipBanner.onclick = () => { tipBanner.classList.remove('show'); clearTimeout(tipTimer); };
 
-    // ========== 全屏逻辑【重点修复：消除黑屏闪烁，iOS式平滑过渡】 ==========
-    let isFull = false;
-    let transitioning = false;
-    btnFullscreen.addEventListener('click', async ()=>{
-      if(transitioning) return;
-      transitioning = true;
-      if(!isFull){
-        // 进入全屏：先加class做CSS过渡，再调用原生全屏API
-        modelContainer.classList.add('fullscreen-mode');
-        await new Promise(resolve => setTimeout(resolve, 320));
-        if(modelContainer.requestFullscreen){
-          await modelContainer.requestFullscreen();
-        }else if(modelContainer.webkitRequestFullscreen){
-          await modelContainer.webkitRequestFullscreen();
+/* ============ FLIP 平滑全屏（纯CSS，不移动DOM，修复层叠上下文） ============ */
+/* 动效基调：进入用超慢出（expo-out，只减速永不回弹），离场用加速消失，
+   对齐 OPPO/vivo 系统面板的手感；杜绝 spring 过冲带来的“弹一下”卡通感 */
+const EASE = 'cubic-bezier(.32,.72,0,1)';        /* iOS 式进场减速：柔和到位、带极轻 settling，不过冲 */
+const EASE_IN = 'cubic-bezier(.4,0,.6,1)';    /* 退场加速：旧画面先保持、末段才消散，交叉淡化全程不露空、不白闪 */
+const FS_IN_MS = 440;
+const XF_MS = 420, XF_SW_MS = 380;             /* 进/退场与互切交叉淡化统一时长：进层与出层完全同步，速度均匀无残影 */
+const XFADE = 'cubic-bezier(.33,0,.22,1)';     /* 柔和、中段速度均匀的交叉淡化曲线（进/出共用，保证两层透明度互补） */
+const FLY_MS = 420;
+const EASE_FLY = 'cubic-bezier(.4,0,.72,.45)';
+const ORI_MS = 540, ORI_EASE = 'cubic-bezier(.32,.72,0,1)';   /* 横竖屏旋转：模型容器/信息卡/按键共用同一时长与缓动，保持同步 */
+let fsState = null;
+let fsPushed = false;   // 是否已为全屏压入历史（让手机返回键先退出全屏，而不是关闭网页）
+let pendingFs = null;   // 两种全屏之间切换时的目标模式
+
+const ICON_EXIT = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>';
+const ICON_ROTATE = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5.8" y="8.8" width="12.4" height="6.4" rx="1.7" opacity="0.4"/><rect x="8.8" y="5.8" width="6.4" height="12.4" rx="1.7"/><circle cx="12" cy="16.9" r="0.55" fill="currentColor" stroke="none" opacity="0.7"/></svg>';
+const ICON_EYE = '<svg class="ic-eye" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 12.2C4.7 7.9 8 5.6 12 5.6s7.3 2.3 9.4 6.6c.13.26.13.55 0 .8C19.3 17.2 16 19.5 12 19.5s-7.3-2.3-9.4-6.5a.95.95 0 0 1 0-.8Z"/><circle cx="12" cy="12.1" r="3.1"/><circle cx="13.15" cy="11" r="1.02" fill="currentColor" stroke="none" opacity=".72"/></svg>';
+const ICON_EYE_OFF = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 5.4C2.9 7 2.6 9.6 2.6 12.2c2.1 4.3 5.4 6.6 9.4 6.6 1.9 0 3.6-.6 5.1-1.5"/><path d="M10.4 6.1c.5-.1 1-.2 1.6-.2 4 0 7.3 2.3 9.4 6.6-.7 1.5-1.7 2.8-2.9 3.8"/><path d="M9.9 10.2a3.1 3.1 0 0 0 4.1 4.1"/><line x1="3.4" y1="3.6" x2="20.6" y2="20.4"/></svg>';
+const ICON_EXPAND = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
+const ICON_PAN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><path d="M8 7l4-4 4 4M7 8l-4 4 4 4M17 8l4 4-4 4M8 17l4 4 4-4"/></svg>';
+const ICON_AUTO = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 3.8v4h-4"/></svg>';
+const ICON_RESET = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/><path d="M12 2.8v2.8M12 18.4v2.8M2.8 12h2.8M18.4 12h2.8"/></svg>';
+const ICON_SWITCH = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13M14 4l3 3-3 3"/><path d="M20 17H7M10 14l-3 3 3 3"/></svg>';
+
+function safeResize(){ try{ if(typeof viewer.resize === "function") viewer.resize(); else window.dispatchEvent(new Event("fs-nudge")); }catch(e){} }
+/* 全屏图标直接复用主页按钮字形，改主页即同步，无需重新认图标 */
+function homeIcon(id){ const h=document.getElementById(id); return h ? h.textContent.trim() : ''; }
+function homeHTML(id){ const h=document.getElementById(id); return h ? h.innerHTML.trim() : ''; }
+function enterFullscreen(type, isSwitch, reuse){
+    if(fsState){
+        /* 已经在全屏里：可点即响应，先收场再展开另一种全屏 */
+    }
+    try{ resetGestureState(false); }catch(e){}
+    /* 全新进入（非互切/复用）前，清掉上一次异常可能残留的快照层，杜绝白屏快照永久覆盖 */
+    if(!isSwitch && !reuse){ document.querySelectorAll('.fs-ghost').forEach(n=>{ try{n.remove();}catch(e){} }); }
+    const el = type === 'model' ? modelContainer : fullWrap;
+    const rect = el.getBoundingClientRect();
+    const srcRect = type === 'page' ? modelContainer.getBoundingClientRect() : rect;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const saved = {
+        position: el.style.position, left: el.style.left, top: el.style.top,
+        width: el.style.width, height: el.style.height, zIndex: el.style.zIndex,
+        borderRadius: el.style.borderRadius, transition: el.style.transition,
+        transform: el.style.transform, transformOrigin: el.style.transformOrigin,
+        willChange: el.style.willChange, wrapZ: fullWrap.style.zIndex
+    };
+
+    const homeGhost = (!isSwitch && !reuse) ? captureGhost(fullWrap) : null;
+    /* 主页快照立即开始纯 CSS 柔化淡出（不依赖收尾 rAF），与进场同档时长，避免被模型解码阻塞而卡住残影 */
+    if(homeGhost) fadeGhostOut(homeGhost, {dur:XF_MS});
+    fullWrap.style.zIndex = '9001';
+
+    let bg, ctrl;
+    if(reuse){ bg = reuse.bg; ctrl = reuse.ctrl; ctrl.innerHTML = ""; }
+    else {
+        document.querySelectorAll('.fs-bg,.fs-ctrl-layer').forEach(n=>{ try{n.remove();}catch(e){} });
+        bg = document.createElement("div");
+        bg.className = "fs-bg"; document.body.appendChild(bg);
+        ctrl = document.createElement("div");
+        ctrl.className = "fs-ctrl-layer"; document.body.appendChild(ctrl);
+    }
+    try{ ctrl.classList.remove('fs-ls','fs-info-off'); }catch(e){}
+    function makeBtn(cls, html, onclick){
+        const b = document.createElement('div');
+        b.className = 'fs-ctrl ' + cls;
+        b.innerHTML = html; b.onclick = onclick;
+        if(typeof bindGlowPress==='function') bindGlowPress(b);
+        ctrl.appendChild(b); return b;
+    }
+    makeBtn('fs-exit', ICON_EXIT, requestExitFullscreen);
+    if(type === 'model'){
+        /* 进入模型全屏一律先复位竖屏/横屏残留 */
+
+        fullWrap.classList.remove('ls-card');
+        modelContainer.style.transform = 'none';
+        makeBtn('fs-rotate', ICON_ROTATE, toggleLandscape);
+        makeBtn('fs-pagebtn', homeIcon('btnFull'), () => switchFullscreen('page'));
+        const panBtn = makeBtn('fs-panbtn', homeIcon('btnPan'), () => setPanMode(!panMode));
+        panBtn.classList.toggle('active', panMode);
+        const freeBtnM = makeBtn('fs-freebtn', homeHTML('btnFree'), () => setFreeMode(!freeMode));
+        freeBtnM.classList.toggle('active', freeMode);
+        const mEye = makeBtn('fs-eye', ICON_EYE+'<i class="eye-badge"></i>', () => {
+            const c = fullWrap.classList.toggle('info-collapsed');
+            mEye.classList.toggle('active', c);
+            mEye.innerHTML = (c?ICON_EYE_OFF:ICON_EYE)+'<i class="eye-badge"></i>';
+        });
+        modelContainer.classList.add('fs-model');
+        fullWrap.classList.add('model-backdrop');
+        setTimeout(()=>{ try{ ensureAbsRadius(); }catch(e){} }, 420);
+    }
+    if(type === 'page'){
+        makeBtn('fs-modelbtn', homeIcon('btnModelFull'), () => switchFullscreen('model'));
+        const eye=$('#btnEyeInline');
+        const floatEye=makeBtn('fs-eye', ICON_EYE+'<i class="eye-badge"></i>', () => toggleInfoCollapse());
+        /* 360 自由旋转键放到右上角眼睛图标旁（与构件全屏一致），不放进右侧 dock */
+        const freeBtnP=makeBtn('fs-freebtn', homeHTML('btnFree'), ()=>setFreeMode(!freeMode));
+        freeBtnP.classList.toggle('active', freeMode);
+        let eyeRun=0;
+        function toggleInfoCollapse(){
+            const run=++eyeRun;
+            const collapsed=fullWrap.classList.toggle('info-collapsed');
+            eye.classList.toggle('active',collapsed);
+            eye.innerHTML=collapsed?ICON_EYE_OFF:ICON_EYE;
+            floatEye.classList.toggle('collapsed',collapsed);
+            floatEye.classList.toggle('active',collapsed);
+            floatEye.innerHTML=(collapsed?ICON_EYE_OFF:ICON_EYE)+'<i class="eye-badge"></i>';
+            ctrl.classList.toggle('fs-info-off', collapsed);
+            /* 无死区折叠：起止 max-height 取卡片真实高度，信息卡收合与模型框 flex 放大从第一帧起同步。
+               run 令牌：快速连点时旧动画的 rAF/定时器全部作废；硬兜底：低端机掉帧也保证到达终态、不残留标题。 */
+            const card=infoCard;
+            const afterFrame=(fn)=>{ let done=false; const go=()=>{ if(done)return; done=true; fn(); }; requestAnimationFrame(()=>requestAnimationFrame(go)); setTimeout(go,70); };
+            if(collapsed){
+                card.style.transition='none';
+                card.style.maxHeight=card.scrollHeight+'px';
+                afterFrame(()=>{ if(run!==eyeRun) return; card.style.transition=''; card.style.maxHeight='0px'; });
+                setTimeout(()=>{ if(run===eyeRun && fullWrap.classList.contains('info-collapsed')){ card.style.transition='none'; card.style.maxHeight='0px'; } },280);
+            }else{
+                /* 高度为 0 时网格 1fr 行会被压扁、scrollHeight 偏小；先无约束量到真实高度再回到 0，同帧完成不闪烁 */
+                card.style.transition='none';
+                card.style.maxHeight='none';
+                const nat=card.scrollHeight;
+                card.style.maxHeight='0px';
+                void card.offsetHeight;
+                card.style.transition='';
+                afterFrame(()=>{ if(run!==eyeRun) return; card.style.maxHeight=nat+'px'; });
+                setTimeout(()=>{ if(run===eyeRun && !fullWrap.classList.contains('info-collapsed')) card.style.maxHeight=''; },300);
+            }
+            setTimeout(()=>{ if(run===eyeRun) safeResize(); },260);
         }
-        isFull = true;
-      }else{
-        // 退出全屏：先退出原生全屏，再移除class做动画
-        if(document.exitFullscreen){
-          await document.exitFullscreen();
-        }else if(document.webkitExitFullscreen){
-          await document.webkitExitFullscreen();
+        eye.onclick=toggleInfoCollapse;
+        /* 右侧功能 dock：自动旋转 / 移动 / 定位复位 / 切换构件(传送) */
+        const dock=document.createElement('div'); dock.className='fs-dock'; ctrl.appendChild(dock);
+        function dockBtn(cls,html,fn){
+            const b=document.createElement('div');
+            b.className='fs-ctrl fs-dock-btn '+cls; b.innerHTML=html; b.onclick=fn;
+            if(typeof bindGlowPress==='function') bindGlowPress(b);
+            dock.appendChild(b); return b;
         }
-        modelContainer.classList.remove('fullscreen-mode');
-        isFull = false;
-      }
-      setTimeout(()=>{
-        transitioning = false;
-      },320);
-    })
-    // 监听ESC退出全屏，同步状态
-    document.addEventListener('fullscreenchange', syncFullState);
-    document.addEventListener('webkitfullscreenchange', syncFullState);
-    function syncFullState(){
-      if(!document.fullscreenElement && !document.webkitFullscreenElement){
-        modelContainer.classList.remove('fullscreen-mode');
-        isFull = false;
-      }
+        const autoB=dockBtn('fs-tool-auto fs-autobtn', homeIcon('btnRotate'), ()=>{
+            if(!rotate && freeMode){ try{ setFreeMode(false); }catch(e){} }
+            rotate=!rotate; viewer.autoRotate=rotate;
+            try{ btnRotate.classList.toggle('active',rotate); }catch(e){}
+            document.querySelectorAll('.fs-autobtn').forEach(x=>x.classList.toggle('active',rotate));
+        });
+        autoB.classList.toggle('active', !!rotate);
+        const panB=dockBtn('fs-tool-pan fs-panbtn', homeIcon('btnPan'), ()=>setPanMode(!panMode));
+        panB.classList.toggle('active', panMode);
+        dockBtn('fs-tool-reset', homeIcon('btnReset'), ()=>{ try{ btnReset.click(); }catch(e){ camPinned=false; viewer.cameraOrbit='0deg 75deg auto'; viewer.cameraTarget='0m 0m 0m'; viewer.jumpCameraToGoal(); setTimeout(ensureAbsRadius,320); } });
+        dockBtn('fs-tool-switch', homeIcon('btnSwitch'), ()=>{ try{ openModelList(); }catch(e){ try{ btnSwitch.click(); }catch(_){} } });
+        fullWrap.classList.add('fs-page');
     }
 
-    // ========== 手势/鼠标移动 rAF 节流优化，解决移动端拖动卡顿 ==========
-    let rafLock = false;
-    document.addEventListener('pointermove', (e)=>{
-      if(rafLock) return;
-      rafLock = true;
-      requestAnimationFrame(()=>{
-        // 这里放你原来的鼠标/手势业务代码，不会阻塞主线程
-        rafLock = false;
-      })
-    })
+    document.body.classList.add('in-fs');
+    try{ viewer.setAttribute('interaction-prompt','none'); viewer.interactionPrompt='none'; }catch(e){}
+    try{ syncControls(); }catch(e){}
+    fullWrap.classList.remove('ls-card');
+    fullWrap.classList.remove('fs-exiting');
 
-    // 其他按钮（重置、手型、截图等），你原有JS逻辑直接粘贴在这里，不会影响布局
-  </script>
+    /* 最终布局一次性到位：fixed 铺满 */
+    el.style.position = "fixed";
+    el.style.left = "0px"; el.style.top = "0px";
+    el.style.width = "100vw"; el.style.height = "100vh";
+    el.style.zIndex = "9002";
+    el.style.transformOrigin = "center center";
+    el.style.willChange = "opacity, transform";
+    if(type === "model") el.style.borderRadius = "26px";
+
+    /* 进入：普通=纯透明度柔和淡入；互切=新层从左下向右上轻移淡入；双 rAF 保证首帧 */
+    const fromTransform = isSwitch ? "translateY(5px)" : "translateY(6px)";   /* 纯淡入+极轻微上浮，不缩放 */
+    el.style.transition = "none";
+    el.style.opacity = isSwitch ? ".22" : "0";
+    el.style.transform = fromTransform;
+    if(!reuse){ bg.style.transition = "none"; bg.style.opacity = "0"; }
+    else { bg.style.transition = "none"; bg.style.opacity = "1"; }
+
+    fsState = { el, type, saved, rect, srcRect, bg, ctrl, isLandscape:false, wantLandscape:false, cssRotated:false };
+    if(!isSwitch){ try{ history.pushState({fs:type}, "", "#" + (type==="model"?"model-full":"page-full")); fsPushed = true; }catch(e){} }
+    void el.offsetHeight;
+    /* 收尾幂等：双 rAF 走正常动画，另加硬兜底定时器。进入瞬间 model-viewer 缩放/解码可能吞掉个别帧，
+       若只靠 rAF 会让模型容器永久停在 opacity:0、快照层不消失（白屏卡死）；硬兜底保证必定收尾。 */
+    let __enterDone=false;
+    function finishEnter(){
+        if(__enterDone) return; __enterDone=true;
+        const xd = isSwitch ? XF_SW_MS : XF_MS;
+        /* 进层与出层用同一时长、同一曲线、同一帧启动，透明度互补，速度均匀；出层里的模型先柔化消散，杜绝双模型残影 */
+        if(el.style.transform && el.style.transform.indexOf('rotate') >= 0){
+            el.style.opacity = "1";
+            if(!reuse){ bg.style.transition = "opacity " + xd + "ms " + XFADE; bg.style.opacity = "1"; }
+            return;
+        }
+        el.style.transition = "opacity " + xd + "ms " + XFADE + ", transform " + xd + "ms " + XFADE;
+        el.style.transform = "translateY(0)";
+        el.style.opacity = "1";
+        if(!reuse){ bg.style.transition = "opacity " + xd + "ms " + XFADE; bg.style.opacity = "1"; }
+        setTimeout(safeResize, 110);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(finishEnter));
+    setTimeout(finishEnter, 150);
+    setTimeout(()=>{ ctrl.querySelectorAll(".fs-ctrl").forEach(b=>b.classList.add("show")); }, 230);
+}
+function requestExitFullscreen(){
+    if(!fsState || fsState.exiting) return;
+    if(fsPushed){ try{ history.back(); }catch(e){ exitFullscreen(); } }
+    else { exitFullscreen(); }
+}
+/* 手机物理/手势返回键 */
+window.addEventListener('popstate', () => {
+    if(fsState){ fsPushed = false; exitFullscreen(); }
+});
+/* 克隆当前画面为静态快照（模型用 toDataURL 截图替换，绝不新建第二个 WebGL 上下文），
+   让真实结构可立即复位/重建，快照在最上层交叉淡出，从根上消除单元素搬移造成的白闪/跳变 */
+function captureGhost(src){
+    try{
+        let shot=''; try{ shot = viewer.toDataURL('image/webp',0.82) || ''; }catch(e){}
+        const g = src.cloneNode(true);
+        g.removeAttribute('id'); g.classList.add('fs-ghost');
+        g.querySelectorAll('model-viewer').forEach(mv=>{
+            const img=document.createElement('img');
+            img.className='fs-shot';
+            if(shot) img.src=shot;
+            img.style.cssText='width:100%;height:100%;object-fit:contain;display:block;border:0;';
+            mv.replaceWith(img);
+        });
+        g.querySelectorAll('.toolbar,#loading,.tip-banner,.progress,.fs-dock,.fs-ctrl-layer').forEach(n=>n.remove());
+        const r=src.getBoundingClientRect();
+        g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;';
+        document.body.appendChild(g);
+        return g;
+    }catch(e){ return null; }
+}
+function fadeGhostOut(g, opts){
+    if(!g) return;
+    opts = opts || {};
+    const dur = opts.dur || XF_MS;
+    /* 纯 CSS 动画：立即打上标记并设时长/方向，元素插入后的首个合成帧即自动播放，
+       不再依赖 requestAnimationFrame（主线程被模型复位阻塞、或切后台被限流时也照常消散），JS 只负责到时移除 */
+    g.style.setProperty('--gd', dur+'ms');
+    g.classList.add('fs-go', opts.down ? 'down' : 'up');
+    setTimeout(()=>{ if(g.parentNode) g.remove(); }, dur+160);
+}
+function exitFullscreen(){
+    const state = fsState;
+    const { el, type, saved, bg, ctrl, rect } = state;
+    /* 横屏复位放到 land() 里，避免退出瞬间闪跳 */
+    state.exiting = true;
+    try{ resetGestureState(false); }catch(e){}
+    if(state.inTimer){ clearTimeout(state.inTimer); state.inTimer = null; }
+    const switching = pendingFs; pendingFs = null;
+
+    ctrl.querySelectorAll('.fs-ctrl').forEach(b=>{ b.style.transitionDelay='0ms'; b.classList.remove('show'); });
+
+    if(switching){
+        /* 互切：冻结旧全屏快照，真实结构立即复位并重建新全屏，新画面在快照下淡入、快照同时淡出（交叉淡化，无白闪） */
+        const ghost = captureGhost(el);
+        fadeGhostOut(ghost, {dur:XF_SW_MS});
+        restoreLayout(el, state, bg, ctrl, true);
+        safeResize();
+        void el.offsetHeight;
+        enterFullscreen(switching, true, {bg, ctrl});
+    } else {
+        /* 退出：冻结全屏快照并立即纯 CSS 淡出；真实结构回到主页，主页与快照同档交叉淡化，速度均匀无残影 */
+        const ghost = captureGhost(el);
+        fadeGhostOut(ghost, {dur:XF_MS, down:true});
+        restoreLayout(el, state, bg, ctrl);
+        safeResize();
+        void el.offsetHeight;
+        fullWrap.style.transition='none'; fullWrap.style.opacity='0'; fullWrap.style.transform='translateY(8px)';
+        void fullWrap.offsetHeight;
+        let __exDone=false;
+        function finishExit(){ if(__exDone)return; __exDone=true;
+            fullWrap.style.transition='opacity '+XF_MS+'ms '+XFADE+',transform '+XF_MS+'ms '+XFADE;
+            fullWrap.style.opacity='1'; fullWrap.style.transform='translateY(0)';
+        }
+        requestAnimationFrame(()=>requestAnimationFrame(finishExit));
+        setTimeout(finishExit,150);
+        setTimeout(()=>{ fullWrap.style.transition=''; fullWrap.style.opacity=''; fullWrap.style.transform=''; try{ safeResize(); }catch(e){} }, XF_MS+160);
+    }
+}
+
+function restoreLayout(el, state, bg, ctrl, keepOverlay){
+    const { saved } = state;
+    el.style.transition = 'none';
+    el.style.transformOrigin = saved.transformOrigin;
+    el.style.position = saved.position;
+    el.style.left = saved.left; el.style.top = saved.top;
+    el.style.width = saved.width; el.style.height = saved.height;
+    el.style.zIndex = saved.zIndex;
+    el.style.borderRadius = saved.borderRadius;
+    el.style.willChange = saved.willChange;
+    el.style.opacity = '';
+    el.style.transform = saved.transform || '';
+    fullWrap.style.zIndex = saved.wrapZ;
+    fullWrap.classList.remove('fs-page','info-collapsed','model-backdrop','fs-exiting','ls-card');
+    (function(){const ei=document.getElementById('btnEyeInline');if(ei){ei.innerHTML=ICON_EYE;ei.classList.remove('active');}})();
+    modelContainer.style.transform='none';modelContainer.style.transformOrigin='';const ic=document.getElementById('infoCard');if(ic){ic.style.transform='';ic.style.transition='';ic.style.opacity='';ic.style.maxHeight='';ic.style.padding='';}
+    modelContainer.classList.remove('fs-model');
+    if(!keepOverlay){
+        document.body.classList.remove("in-fs");
+        /* 退出：遮罩与按键层柔和淡出后再移除，避免瞬间抽掉背景造成白跳 */
+        try{ ctrl.style.transition='opacity .34s '+XFADE; ctrl.style.opacity='0'; }catch(e){}
+        try{ bg.style.transition='opacity '+XF_MS+'ms '+XFADE; bg.style.opacity='0'; }catch(e){}
+        setTimeout(()=>{ try{bg.remove();}catch(e){} try{ctrl.remove();}catch(e){} }, XF_MS+140);
+    }
+    try{ viewer.setAttribute('interaction-prompt','auto'); viewer.interactionPrompt='auto'; }catch(e){}
+    fsState = null;
+    try{ syncControls(); }catch(e){}
+    void el.offsetHeight;
+    /* 退场交叉淡化结束后由 exitFullscreen 统一清理 fullWrap 内联样式，避免提前清掉导致跳变 */
+}
+/* 全屏模式之间互切：整页 ⇄ 模型，收场即开场，一段连贯动作 */
+function switchFullscreen(type){
+    if(!fsState || fsState.exiting || fsState.type === type) return;
+    if(pendingFs) return;
+    pendingFs = type;
+    exitFullscreen();
+}
+
+
+function applyOrientation(){
+    if(!fsState || fsState.type !== 'model') return;
+    const want = !!fsState.wantLandscape;
+    const css = want && !isRealLandscape();   /* 视口没真横过来才用 CSS 强制旋转；物理真横屏直接自然布局 */
+    fsState.isLandscape = want;
+    fsState.cssRotated = css;
+    const el = fsState.el;
+    if(fsState.ctrl) fsState.ctrl.classList.toggle('fs-ls', css);
+    fullWrap.classList.toggle('ls-card', css);
+    try{ syncControls(); }catch(e){}
+    el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
+    el.style.transformOrigin = 'center center';
+    if(css){
+        el.style.left='50%'; el.style.top='50%';
+        el.style.width='100vh'; el.style.height='100vw';
+        el.style.transform='translate(-50%,-50%) rotate(90deg)';
+    } else {
+        el.style.left='0'; el.style.top='0';
+        el.style.width='100vw'; el.style.height='100vh';
+        el.style.transform='none';
+    }
+    try{ resetGestureState(true); }catch(e){}
+    showToast(want ? '横屏模式' : '竖屏模式');
+    try{ safeResize(); }catch(e){}
+    setTimeout(function(){ resetCameraView(); setTimeout(safeResize, 80); }, 300);
+}
+function toggleLandscape(){
+    if(!fsState || fsState.type !== 'model') return;
+    fsState.wantLandscape = !fsState.wantLandscape;
+    applyOrientation();
+}
+function resetLandscape(immediate){
+    if(!fsState || fsState.exiting) return;
+    fsState.wantLandscape = false; fsState.isLandscape = false; fsState.cssRotated = false;
+    const el = fsState.el;
+    el.style.transformOrigin = 'center center';
+    if(immediate){ el.style.transition = 'none'; el.style.transform = 'none'; void el.offsetHeight; el.style.transition = ''; }
+    else { el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE; el.style.transform = 'none'; }
+    try{ if(fsState.ctrl) fsState.ctrl.classList.remove('fs-ls'); }catch(e){}
+    fullWrap.classList.remove('ls-card');
+}
+/* 点按信息小格：触点涟漪扩散 + 该格外圈泛起光晕（仅整页全屏呈现） */
+document.querySelectorAll('.info-card .row').forEach(row => {
+    let litTimer = null;
+    row.addEventListener('pointerdown', e => {
+        const r = row.getBoundingClientRect();
+        const rip = document.createElement('span');
+        rip.className = 'ripple';
+        rip.style.left = (e.clientX - r.left) + 'px';
+        rip.style.top = (e.clientY - r.top) + 'px';
+        row.appendChild(rip);
+        rip.addEventListener('animationend', () => rip.remove());
+        row.classList.add('lit');
+        clearTimeout(litTimer);
+        litTimer = setTimeout(() => row.classList.remove('lit'), 700);
+    });
+});
+/* 整页全屏时点按模型卡片，边缘轻亮一下作为触达反馈 */
+let modelTapTimer = null;
+modelContainer.addEventListener('pointerdown', () => {
+    if(!document.body.classList.contains('in-fs') || (fsState && fsState.type === 'model')) return;
+    modelContainer.classList.add('fs-tap');
+    clearTimeout(modelTapTimer);
+    modelTapTimer = setTimeout(() => modelContainer.classList.remove('fs-tap'), 520);
+});
+/* ===== 手势层（自绘，避免与内置相机控制抢手势而卡住）=====
+   关键：model-viewer 初始 camera-orbit 半径是百分比/auto，平移 target 时它会重算半径，
+   导致按半径换算的平移增益剧烈跳动（越拖越飘/反向/走不回）。手势开始即把半径钉成绝对米制，
+   之后旋转/平移/缩放全部基于稳定半径，线性跟手。
+   - 旋转模式(panMode=false)：完全放行，用原生单指旋转 + 原生双指。
+   - 移动模式(panMode=true)：自绘——单指=1:1 抓取平移，双指=原地捏合缩放（不转向、不跳位）。
+   - 真横屏（视口本身宽>高：手机物理横过来/桌面）与竖屏同一套控制器，坐标天然正确。
+   - 强制横屏（竖屏视口下点横屏，CSS rotate90）才用 ls* 控制器做逆坐标换算。 */
+let panMode = false, gt = null, midPan = null;
+let camPinned = false, framedR = null;
+const DEG = Math.PI/180;
+function isRealLandscape(){ return window.innerWidth > window.innerHeight; }
+/* 把当前轨道半径钉成绝对米制（保留角度），平移/缩放期间半径恒定 */
+function pinCameraAbsolute(){
+    try{
+        const o = viewer.getCameraOrbit(); const r = Math.abs(o.radius);
+        if(!(isFinite(r) && r > 0.1)) return false;
+        framedR = r;
+        try{ viewer.setAttribute('min-camera-orbit','auto 0deg '+(r*0.12).toFixed(2)+'m'); viewer.setAttribute('max-camera-orbit','auto 180deg '+(r*2.6).toFixed(2)+'m'); }catch(e){}
+        viewer.cameraOrbit = (o.theta/DEG).toFixed(4)+'deg '+(o.phi/DEG).toFixed(4)+'deg '+r.toFixed(3)+'m';
+        return true;
+    }catch(e){ return false; }
+}
+function ensureAbsRadius(){ if(camPinned) return true; camPinned = pinCameraAbsolute(); if(camPinned){ try{ viewer.jumpCameraToGoal(); }catch(e){} } return camPinned; }
+/* 复位视角并在取景稳定后钉半径（进入/横竖屏切换调用），轮询应对相机异步 */
+function resetCameraView(){
+    camPinned = false; panT = null;
+    try{ viewer.cameraTarget='0m 0m 0m'; viewer.cameraOrbit='0deg 75deg auto'; viewer.jumpCameraToGoal(); freePitch=0; freeYaw=0; viewer.orientation='0deg 0deg 0deg'; }catch(e){}
+    let tries = 0, lastR = -1, stable = 0;
+    const t = setInterval(()=>{
+        tries++;
+        let r = NaN; try{ r = Math.abs(viewer.getCameraOrbit().radius); }catch(e){}
+        if(isFinite(r) && r > 0.1){
+            if(lastR > 0 && Math.abs(r-lastR) < 0.5) stable++; else stable = 0;
+            lastR = r;
+            if(stable >= 1 || tries > 7){
+                framedR = r;
+        try{ viewer.setAttribute('min-camera-orbit','auto 0deg '+(r*0.12).toFixed(2)+'m'); viewer.setAttribute('max-camera-orbit','auto 180deg '+(r*2.6).toFixed(2)+'m'); }catch(e){} camPinned = true; clearInterval(t);
+                try{ viewer.cameraOrbit='0deg 75deg '+r.toFixed(3)+'m'; viewer.cameraTarget='0m 0m 0m'; viewer.jumpCameraToGoal(); freePitch=0; freeYaw=0; viewer.orientation='0deg 0deg 0deg'; }catch(e){}
+            }
+        } else if(tries > 16){ clearInterval(t); }
+    }, 100);
+}
+/* 屏幕像素 -> 世界位移系数：按相机到目标点距离与垂直视场角，做到 1:1 抓取、不随平移漂移 */
+function panScale(){
+    const o = viewer.getCameraOrbit(), box = viewer.getBoundingClientRect();
+    const r = Math.abs(o.radius);
+    let fov = 30; try{ fov = viewer.getFieldOfView() || 30; }catch(e){}
+    const h = Math.max(1, viewer.clientHeight || box.height);
+    return 2 * r * Math.tan(0.5 * fov * DEG) / h;
+}
+let panT = null;   /* 本端权威平移目标：model-viewer 属性异步生效，同帧多指针事件回读会是旧值，
+                      故在 JS 内同步累加，复位/切模式时置空重新播种，保证双指平移不丢量 */
+function syncPanT(){ if(panT) return panT; const t=viewer.getCameraTarget(); panT={x:t.x,y:t.y,z:t.z}; return panT; }
+function applyPan(dx, dy){
+    if(!ensureAbsRadius()) return;
+    const o = viewer.getCameraOrbit(), s = panScale();
+    const th = o.theta, ph = o.phi;
+    const rx = Math.cos(th), rz = -Math.sin(th);
+    const ux = -Math.cos(ph)*Math.sin(th), uy = Math.sin(ph), uz = -Math.cos(ph)*Math.cos(th);
+    const tg = syncPanT();
+    tg.x += (-dx*rx + dy*ux) * s;
+    tg.y += (dy*uy) * s;
+    tg.z += (-dx*rz + dy*uz) * s;
+    viewer.cameraTarget = tg.x.toFixed(3)+'m '+tg.y.toFixed(3)+'m '+tg.z.toFixed(3)+'m';
+    viewer.jumpCameraToGoal();
+}
+const onUI = e => e.target && e.target.closest && e.target.closest('.btn,.icon-btn,.fs-ctrl,.ml-search,input,button');
+function radOf(o){ const v=(typeof o.radius==='number')?o.radius:parseFloat(o.radius); const a=Math.abs(v); return (isFinite(a)&&a>0.1)?a:(framedR||2); }
+function clampRad(r){ const base=framedR||r; return Math.min(2.5*base, Math.max(0.13*base, r)); }
+/* 写轨道（角度+绝对半径），带有限性保护，双指只改半径、不带动角度 */
+function writeOrbit(theta, phi, r){
+    if(!isFinite(theta)) theta = 0;
+    if(!isFinite(phi)) phi = 75*DEG;
+    phi = Math.min(Math.PI, Math.max(0, phi));
+    if(!(isFinite(r) && r > 0.1)) r = framedR || radOf(viewer.getCameraOrbit());
+    viewer.cameraOrbit = (theta/DEG).toFixed(3)+'deg '+(phi/DEG).toFixed(3)+'deg '+r.toFixed(3)+'m';
+    viewer.jumpCameraToGoal();
+}
+/* 360°自由旋转：直接连续旋转"模型本体"(orientation)，没有相机 0~180 极角锁、也没有过极点翻面。
+   实测 model-viewer orientation 三角度对应固定世界轴 R=Ry(第3角)·Rx(第2角)·Rz(第1角)：
+   第3角=绕竖直轴水平转向、第2角=绕屏幕水平轴前后翻滚，均为固定世界轴，任意朝向下都贴合手指、无限连续。 */
+let freeMode = false;
+const FREE_GX = 0.0115, FREE_GY = 0.0115;  /* 垂直/水平灵敏度（弧度/像素），与原生轨道实测增益一致 */
+let freePitch = 0, freeYaw = 0;              /* 连续累积、无上下限，可平滑越过 180/360，不翻面 */
+function writeFreeOrientation(){
+    viewer.orientation='0deg '+(freePitch/DEG).toFixed(3)+'deg '+(freeYaw/DEG).toFixed(3)+'deg';
+    try{ viewer.jumpCameraToGoal(); }catch(err){}
+}
+/* 喂入"模型本地视口坐标系"位移：dx 向右+、dy 向下+ */
+function applyFreeTrack(dx,dy){
+    freePitch += -FREE_GX*dy;   /* 上下拖动：绕世界X连续翻滚（上拖看顶部、可越过底/顶无限转） */
+    freeYaw   +=  FREE_GY*dx;   /* 左右拖动：绕世界Y转向，方向与原生相机轨道(θ)互为反向、视觉一致 */
+    writeFreeOrientation();
+}
+function resetFree(){ freePitch = 0; freeYaw = 0; try{ viewer.orientation='0deg 0deg 0deg'; viewer.jumpCameraToGoal(); }catch(e){} }
+function stopAutoSpin(){ try{ if(rotate){ rotate=false; viewer.autoRotate=false; if(btnRotate) btnRotate.classList.remove('active'); document.querySelectorAll('.fs-autobtn').forEach(x=>x.classList.remove('active')); } }catch(e){} }
+
+/* ---------- 竖屏 / 真横屏 通用控制器（坐标与视口同向，无需换算）---------- */
+const pts = new Map();
+let pg = null;   /* {kind:'pan'|'pinch', last, d0, r0} */
+function pgDown(e){
+    if(fsState && fsState.cssRotated) return;   /* 强制横屏交给 ls 控制器 */
+    if(!panMode && !freeMode) return;            /* 默认旋转交原生；移动/360自由由自绘 */
+    if(onUI(e)) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();     /* 接管，阻止原生单指旋转 */
+    pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pts.size === 1){ ensureAbsRadius(); if(!panMode) stopAutoSpin(); pg = panMode ? {kind:'pan', last:{x:e.clientX, y:e.clientY}} : {kind:'orbit', last:{x:e.clientX, y:e.clientY}}; }
+    else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:radOf(viewer.getCameraOrbit()), m0:{x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2}}; }
+}
+function pgMove(e){
+    if(fsState && fsState.cssRotated) return;
+    if((!panMode && !freeMode) || !pts.has(e.pointerId)) return;
+    if(onUI(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(!pg) return;
+    const a = [...pts.values()];
+    if(pg.kind === 'pinch' && pts.size >= 2){
+        const m = {x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2};
+        if(panMode && pg.m0) applyPan(m.x-pg.m0.x, m.y-pg.m0.y);
+        pg.m0 = m;
+        const d = Math.max(1, Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y));
+        const o = viewer.getCameraOrbit(); writeOrbit(o.theta, o.phi, clampRad(pg.r0*pg.d0/d));
+        return;
+    }
+    if(pts.size !== 1) return;
+    const mdx = e.clientX-pg.last.x, mdy = e.clientY-pg.last.y;
+    if(pg.kind === 'orbit'){ applyFreeTrack(mdx, mdy); }
+    else { applyPan(mdx, mdy); }
+    pg.last = {x:e.clientX, y:e.clientY};
+}
+function pgUp(e){
+    if(pts.has(e.pointerId)) pts.delete(e.pointerId);
+    if(pts.size === 1){ const p=[...pts.values()][0]; pg = panMode ? {kind:'pan', last:{...p}} : {kind:'orbit', last:{...p}}; }
+    else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:radOf(viewer.getCameraOrbit()), m0:{x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2}}; }
+    else { pg = null; }
+}
+modelContainer.addEventListener('pointerdown', pgDown, {capture:true, passive:false});
+modelContainer.addEventListener('pointermove', pgMove, {capture:true, passive:false});
+modelContainer.addEventListener('pointerup', pgUp, {capture:true});
+modelContainer.addEventListener('pointercancel', pgUp, {capture:true});
+
+/* ---------- 强制横屏（竖屏视口下 CSS rotate90 scale）控制器：逆坐标换算 ---------- */
+const lsPts = new Map();
+let lsGesture = null;
+/* 真机某轴向若相反，只改这两个常量(1/-1) */
+const LS_THETA_SIGN = -1, LS_PHI_SIGN = -1;
+function lsK(){ return window.innerHeight / Math.max(1, window.innerWidth); }
+/* 物理像素位移 -> 模型本地(未旋转)位移：rotate(90)scale(k) 的逆变换 */
+function lsLocal(dx, dy){ return {x:dy, y:-dx}; }
+function lsDown(e){
+    if(!(fsState && fsState.cssRotated)){ lsPts.clear(); lsGesture = null; return; }
+    if(onUI(e)) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    ensureAbsRadius();
+    lsPts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    const arr = [...lsPts.values()], o = viewer.getCameraOrbit();
+    if(lsPts.size === 1){ if(!panMode) stopAutoSpin(); lsGesture = panMode ? {kind:'pan',last:{x:e.clientX,y:e.clientY}} : {kind:'orbit',last:{x:e.clientX,y:e.clientY}}; }
+    else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o, r0:radOf(o), m0:{x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2}}; }
+}
+function lsMove(e){
+    if(!(fsState && fsState.cssRotated) || !lsPts.has(e.pointerId)) return;
+    if(onUI(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    lsPts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(!lsGesture) return;
+    const arr = [...lsPts.values()];
+    if(lsGesture.kind === 'pinch' && lsPts.size >= 2){
+        const m = {x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2};
+        if(panMode && lsGesture.m0){ const Lm=lsLocal(m.x-lsGesture.m0.x, m.y-lsGesture.m0.y); applyPan(Lm.x,Lm.y); }
+        lsGesture.m0 = m;
+        const d = Math.max(1, Math.hypot(arr[0].x-arr[1].x, arr[0].y-arr[1].y));
+        const o = viewer.getCameraOrbit(); writeOrbit(o.theta, o.phi, clampRad(lsGesture.r0*lsGesture.d0/d));
+        return;
+    }
+    if(lsPts.size !== 1) return;
+    const L = lsLocal(e.clientX-lsGesture.last.x, e.clientY-lsGesture.last.y);
+    if(lsGesture.kind === 'orbit'){
+        if(freeMode){
+            /* lsLocal 已把物理位移换算成模型本地坐标；模型自转 yaw 与相机θ反向，故直接喂本地坐标即可同向 */
+            applyFreeTrack(L.x, L.y);
+        }else{
+            const o = viewer.getCameraOrbit(), g = 0.0062;
+            writeOrbit(o.theta + LS_THETA_SIGN*L.x*g, o.phi + LS_PHI_SIGN*L.y*g, radOf(o));
+        }
+    }else if(lsGesture.kind === 'pan'){
+        applyPan(L.x, L.y);
+    }
+    lsGesture.last = {x:e.clientX, y:e.clientY};
+}
+function lsUp(e){
+    if(lsPts.has(e.pointerId)) lsPts.delete(e.pointerId);
+    const arr = [...lsPts.values()];
+    if(!(fsState && fsState.cssRotated)){ lsGesture = null; return; }
+    if(lsPts.size === 1){ lsGesture = panMode ? {kind:'pan',last:{...arr[0]}} : {kind:'orbit',last:{...arr[0]}}; }
+    else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o:viewer.getCameraOrbit(), r0:radOf(viewer.getCameraOrbit()), m0:{x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2}}; }
+    else { lsGesture = null; }
+}
+modelContainer.addEventListener('pointerdown', lsDown, {capture:true, passive:false});
+modelContainer.addEventListener('pointermove', lsMove, {capture:true, passive:false});
+modelContainer.addEventListener('pointerup', lsUp, {capture:true});
+modelContainer.addEventListener('pointercancel', lsUp, {capture:true});
+
+/* 桌面中键平移（不碰 cameraControls） */
+modelContainer.addEventListener('pointerdown', e => {
+    if(e.pointerType !== 'mouse' || e.button !== 1 || onUI(e)) return;
+    e.preventDefault(); e.stopPropagation(); midPan = {x:e.clientX, y:e.clientY};
+}, true);
+modelContainer.addEventListener('pointermove', e => {
+    if(!midPan) return;
+    e.stopPropagation();
+    let dx = e.clientX-midPan.x, dy = e.clientY-midPan.y;
+    if(fsState && fsState.cssRotated){ const t=dx; dx=dy; dy=-t; }
+    applyPan(dx, dy); midPan.x=e.clientX; midPan.y=e.clientY;
+}, true);
+const midUp = () => { midPan = null; };
+modelContainer.addEventListener('pointerup', midUp, true);
+modelContainer.addEventListener('pointercancel', midUp, true);
+modelContainer.addEventListener('mousedown', e => { if(e.button === 1) e.preventDefault(); });
+modelContainer.addEventListener('wheel', e => {
+    if(viewer.hasAttribute('camera-controls')) return;   /* 旋转模式：原生滚轮缩放 */
+    if(onUI(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    if(!ensureAbsRadius()) return;
+    const o = viewer.getCameraOrbit();
+    const mag = Math.min(1.2, Math.abs(e.deltaY) * 0.0016 || 0.001);
+    const f = Math.exp((e.deltaY > 0 ? 1 : -1) * mag);  /* 上滚放大、下滚缩小，与原生一致 */
+    writeOrbit(o.theta, o.phi, clampRad(radOf(o) * f));
+}, {capture:true, passive:false});
+
+function syncModeBtns(){ document.querySelectorAll('#btnPan,.fs-panbtn').forEach(b => b.classList.toggle('active', panMode)); document.querySelectorAll('#btnFree,.fs-freebtn').forEach(b => b.classList.toggle('active', freeMode)); }
+/* 统一清空手势瞬时状态（触点/锚点/中键），避免锁屏、切后台、反复进出全屏、横竖屏切换后残留旧触点导致坐标错乱 */
+function resetGestureState(keepMode){
+    if(!keepMode) panMode = false;
+    gt = null; midPan = null; pg = null; lsGesture = null;
+    try{ pts.clear(); }catch(e){}
+    try{ lsPts.clear(); }catch(e){}
+    try{ syncModeBtns(); }catch(e){}
+}
+/* 统一原生/自绘控制器，保证手机触摸与电脑鼠标行为完全一致、绝不叠加：
+   强制横屏(CSS旋转)：原生关闭，平移/旋转/捏合全由 ls 自绘（坐标需逆变换）；
+   正常朝向：旋转模式交原生单指旋转；移动模式关闭原生，由 pg 自绘平移/捏合。 */
+function syncControls(){
+    const ls = !!(fsState && fsState.cssRotated);
+    const nativeOn = ls ? false : (!panMode && !freeMode);
+    try{
+        if(nativeOn) viewer.setAttribute('camera-controls',''); else viewer.removeAttribute('camera-controls');
+        modelContainer.style.touchAction = 'none';
+        viewer.style.touchAction = 'none';
+    }catch(e){}
+    try{ syncModeBtns(); }catch(e){}
+}
+function setPanMode(on){
+    panMode = !!on;
+    if(panMode) freeMode = false;
+    if(!freeMode){ try{ resetFree(); }catch(e){} }
+    panT = null;
+    try{ resetGestureState(true); }catch(e){}
+    if(panMode || freeMode) ensureAbsRadius();
+    syncControls();
+    showToast(panMode ? '移动模式：单指拖移 · 双指缩放（双指拖动可平移）' : '旋转模式：单指旋转 · 双指缩放');
+}
+function setFreeMode(on){
+    freeMode = !!on;
+    if(freeMode) panMode = false;
+    panT = null;
+    try{ resetGestureState(true); }catch(e){}
+    if(panMode || freeMode) ensureAbsRadius();
+    if(freeMode){ stopAutoSpin(); }
+    resetFree();
+    syncControls();
+    showToast(freeMode ? '360°自由旋转：上下左右均可连续翻转 · 双指缩放' : '旋转模式：单指旋转 · 双指缩放');
+}
+btnPan.onclick = () => setPanMode(!panMode);
+btnFree.onclick = () => setFreeMode(!freeMode);
+/* 切后台/锁屏/页面隐藏时触摸常常收不到 pointerup，回前台丢弃残留触点（保留当前模式） */
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ try{ resetGestureState(true); }catch(e){} } });
+window.addEventListener('pagehide', ()=>{ try{ resetGestureState(true); }catch(e){} });
+window.addEventListener('blur', ()=>{ try{ resetGestureState(true); }catch(e){} });
+
+(function(){var ei=document.getElementById('btnEyeInline'); if(ei && !ei.innerHTML.trim()) ei.innerHTML=ICON_EYE;})();
+btnModelFull.onclick = () => { if(fsState && !document.body.classList.contains('in-fs')){ fsState=null; } enterFullscreen('model'); };
+btnFull.onclick = () => { if(fsState && !document.body.classList.contains('in-fs')){ fsState=null; } fsState ? requestExitFullscreen() : enterFullscreen('page'); };
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && fsState) requestExitFullscreen(); });
+let __orzT=null;
+window.addEventListener('resize', () => {
+    if(!fsState) return;
+    safeResize();
+    if(fsState.type==='model' && fsState.wantLandscape){ clearTimeout(__orzT); __orzT=setTimeout(applyOrientation, 170); }
+});
+window.addEventListener('orientationchange', () => { setTimeout(()=>{ if(fsState && fsState.type==='model' && fsState.wantLandscape) applyOrientation(); }, 220); });
+if(location.hash && /full/.test(location.hash)){ try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){} }
+/* ===================== 一键复制构件信息 ===================== */
+function copyText(t){
+    return new Promise(res => {
+        let ok=false;
+        try{
+            const ta=document.createElement('textarea');
+            ta.value=t; ta.setAttribute('readonly','');
+            ta.style.cssText='position:fixed;top:6px;left:6px;width:1px;height:1px;padding:0;border:0;opacity:0;';
+            document.body.appendChild(ta); ta.focus();
+            ta.select(); ta.setSelectionRange(0,t.length);
+            try{ ok=document.execCommand('copy'); }catch(e){}
+            ta.remove();
+        }catch(e){}
+        if(ok) return res(true);
+        if(navigator.clipboard && navigator.clipboard.writeText){
+            navigator.clipboard.writeText(t).then(()=>res(true)).catch(()=>res(false));
+        } else res(false);
+    });
+}
+$('#btnCopy').onclick = async () => {
+    if(!id || !partData[id]){ showToast('暂无可复制的信息'); return; }
+    const d = partData[id];
+    const labels = {partId:'构件编号',workNo:'加工号',projectName:'项目名称',section:'分部工程',partType:'构件类型',material:'材质',spec:'规格',quantity:'数量'};
+    let txt = fields.map(f => labels[f] + '：' + (d[f] || '')).join('\n') + '\n昆明长水国际机场项目 · 钢结构构件一物一码';
+    const ok = await copyText(txt);
+    showToast(ok ? '构件信息已复制，可粘贴发送' : '复制失败，请长按选择文字');
+};
+
+/* ===================== 管理员入口 / 在线编辑 ===================== */
+const editFields = ['workNo','projectName','section','partType','material','spec','quantity'];
+const ADMIN_PWD = 'zwj0503';
+const adminMask=$('#adminMask'), adminCard=$('#adminCard'), adminPwd=$('#adminPwd'), adminErr=$('#adminErr'), adminBar=$('#adminBar');
+let adminOn = false;
+function openAdmin(){
+    adminMask.classList.add('show'); adminErr.classList.remove('show');
+    adminCard.classList.remove('shake'); adminPwd.value='';
+    setTimeout(()=>adminPwd.focus(),140);
+}
+function closeAdmin(){ adminMask.classList.remove('show'); adminPwd.value=''; }
+$('#btnAdmin').onclick = openAdmin;
+$('#adminCancel').onclick = closeAdmin;
+adminMask.addEventListener('click', e => { if(e.target===adminMask) closeAdmin(); });
+function submitPwd(){
+    if(adminPwd.value === ADMIN_PWD){ closeAdmin(); enterEdit(); }
+    else{
+        adminErr.classList.add('show');
+        adminCard.classList.remove('shake'); void adminCard.offsetWidth; adminCard.classList.add('shake');
+        adminPwd.select();
+    }
+}
+$('#adminOk').onclick = submitPwd;
+adminPwd.addEventListener('keydown', e => { if(e.key==='Enter') submitPwd(); if(e.key==='Escape') closeAdmin(); });
+
+function enterEdit(){
+    adminOn = true;
+    document.body.classList.add('editing'); infoCard.classList.add('editing');
+    editFields.forEach(f => { const el=$('#'+f); if(el) el.setAttribute('contenteditable','true'); });
+    const pidEl=$('#partId'); if(pidEl && pidEl.parentElement) pidEl.parentElement.setAttribute('data-lock','1');
+    adminBar.classList.add('show');
+    showToast('已进入编辑模式，改完点“保存修改”');
+}
+function exitEdit(){
+    adminOn = false;
+    document.body.classList.remove('editing'); infoCard.classList.remove('editing');
+    editFields.forEach(f => { const el=$('#'+f); if(el) el.removeAttribute('contenteditable'); });
+    adminBar.classList.remove('show');
+}
+function collectEdits(){
+    const rec={};
+    editFields.forEach(f => { const el=$('#'+f); if(el) rec[f]=el.innerText.trim(); });
+    return rec;
+}
+$('#adminSave').onclick = () => {
+    if(!id || !partData[id]){ showToast('当前构件不可编辑'); return; }
+    const rec = collectEdits();
+    Object.assign(partData[id], rec);
+    let ov={}; try{ ov=JSON.parse(localStorage.getItem(OV_KEY)||'{}'); }catch(e){}
+    ov[id] = Object.assign({}, ov[id], rec);
+    localStorage.setItem(OV_KEY, JSON.stringify(ov));
+    showToast('已保存到本机，导出后可同步线上');
+};
+$('#adminDone').onclick = exitEdit;
+$('#adminClear').onclick = () => {
+    try{ const ov=JSON.parse(localStorage.getItem(OV_KEY)||'{}');
+        if(ov[id]){ delete ov[id]; localStorage.setItem(OV_KEY, JSON.stringify(ov)); }
+    }catch(e){}
+    location.reload();
+};
+$('#adminExport').onclick = () => {
+    if(adminOn && id && partData[id]){ Object.assign(partData[id], collectEdits()); }  /* 没先点保存也导出当前屏幕内容 */
+    let txt = '// 构件数据总对象，网页读取所有构件信息\r\n';
+    txt += '// 由管理员在页面“导出 data.js”生成：用本文件替换仓库中的 data.js，再用 GitHub Desktop 提交推送即可同步线上\r\n';
+    txt += 'window.partData = ' + JSON.stringify(window.partData, null, 4) + ';\r\n';
+    const blob = new Blob([txt], {type:'text/javascript;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'data.js';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+    showToast('已导出 data.js，请替换仓库文件并提交', 2600);
+};
+
+const shotMask=document.getElementById('shotMask'), shotImg=document.getElementById('shotImg');
+async function captureShot(){
+    const v=document.getElementById('viewer');
+    if(!v || typeof v.toDataURL!=='function'){ showToast('模型还在加载，请稍后再试'); return; }
+    showToast('正在生成图片…');
+    try{
+        await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+        const url=v.toDataURL('image/png',0.92);
+        if(!url){ showToast('截图失败，请重试'); return; }
+        shotImg.src=url; shotMask.classList.add('show');
+    }catch(e){ showToast('截图失败，请重试'); }
+}
+document.getElementById('btnMini').onclick=captureShot;
+document.getElementById('shotClose').onclick=()=>shotMask.classList.remove('show');
+shotMask.addEventListener('click',e=>{ if(e.target===shotMask) shotMask.classList.remove('show'); });
+document.getElementById('shotSave').onclick=()=>{ const a=document.createElement('a'); a.href=shotImg.src; a.download='gangjiegou-model.png'; document.body.appendChild(a); a.click(); a.remove(); };
+/* 功能按钮点按柔光光晕（静态按钮 + 动态生成按钮均可用） */
+function bindGlowPress(el){
+    if(!el || el.__glowBound) return; el.__glowBound=true;
+    el.classList.add('glow-press');
+    el.addEventListener('pointerdown',function(e){
+        const r=el.getBoundingClientRect();
+        const x=(e.clientX||r.left+r.width/2)-r.left, y=(e.clientY||r.top+r.height/2)-r.top;
+        const d=Math.max(r.width,r.height)*2.6;
+        const sp=document.createElement('span'); sp.className='gp-ripple';
+        sp.style.left=x+'px'; sp.style.top=y+'px'; sp.style.width=d+'px'; sp.style.height=d+'px';
+        el.appendChild(sp); setTimeout(()=>sp.remove(),640);
+    });
+    /* 点按后立即失焦，清除手机 WebView 残留在按钮上的蓝色聚焦框（输入框除外） */
+    el.addEventListener('click',function(){ const t=el.tagName; if(t!=='INPUT'&&t!=='TEXTAREA'&&t!=='SELECT'){ try{ el.blur(); }catch(e){} } });
+}
+document.querySelectorAll('.toolbar .btn,.icon-btn,.mbtn,.abtn').forEach(bindGlowPress);
+</script>
 </body>
 </html>
