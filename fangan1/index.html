@@ -550,7 +550,8 @@
         .admin-bar.show{animation:barIn .5s cubic-bezier(.32,.72,0,1) both;}
         @keyframes barIn{from{opacity:0;transform:translate(-50%,26px);}to{opacity:1;transform:translate(-50%,0);}}
         /* ===== 全局统一：浅灰底 + 纯白卡片（iOS/小米风格） ===== */
-        body{background:#eef0f4!important;}
+        html{background:#eef0f4;}
+        body{background:#eef0f4!important;min-height:100vh;}
         .info-card,.info-grid,.field,.model-list,.model-item,.admin-bar,.tip-banner,.toast,.fs-toolbar,.fs-bottom-bar,.mini-backdrop{
             backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
         }
@@ -573,12 +574,12 @@
         body.in-fs{background:#eef0f4!important;}
         body.in-fs .full-wrap{background:transparent!important;}
         .model-container{background:#ffffff!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
-        /* 构件全屏：信息卡在模型左下角，白色卡片全圆角 */
+        /* 构件全屏：信息卡半透明浮在模型上，不遮挡视线 */
         .full-wrap.model-backdrop .info-card{
-            background:#ffffff!important;
-            backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
-            box-shadow:0 8px 32px rgba(50,80,130,.14),0 2px 8px rgba(50,80,130,.08)!important;
-            border:1px solid rgba(0,0,0,.05)!important;
+            background:rgba(255,255,255,.68)!important;
+            backdrop-filter:blur(10px) saturate(140%)!important;-webkit-backdrop-filter:blur(10px) saturate(140%)!important;
+            box-shadow:0 4px 20px rgba(50,80,130,.08)!important;
+            border:1px solid rgba(255,255,255,.6)!important;
             -webkit-mask-image:none!important;mask-image:none!important;
             z-index:9003!important;
             border-radius:20px!important;
