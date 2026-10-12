@@ -1,37 +1,15 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>中铁装配 钢结构构件信息</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%232563a8%22/><path d=%22M50 24 L76 38 L76 64 L50 78 L24 64 L24 38 Z%22 fill=%22none%22 stroke=%22white%22 stroke-width=%225%22 stroke-linejoin=%22round%22/><path d=%22M50 24 L50 51 M24 38 L50 51 L76 38 M50 51 L50 78%22 fill=%22none%22 stroke=%22white%22 stroke-width=%225%22 stroke-linejoin=%22round%22/></svg>">
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-    <!-- 模型库本地化：不再依赖外网 CDN（境内访问省掉一次跨境握手，弱网下也不会加载失败） -->
     <link rel="modulepreload" href="lib/model-viewer.min.js">
-    <!-- Draco 解码器预载：模型是 KHR_draco_mesh_compression 压缩的，解码器必须拿到 -->
     <link rel="preload" as="script" href="lib/draco/draco_wasm_wrapper.js">
     <link rel="preload" as="fetch" href="lib/draco/draco_decoder.wasm" crossorigin>
     <script>
-      /* 闪黑根因修复：本地库把 WebGL 的 preserveDrawingBuffer 写死为 false（无配置项），
-         canvas 呈现后缓冲区即被清空，toDataURL 截出来是纯黑图 —— 快照盖顶就"闪黑一下"。
-         在库加载前给 getContext 打补丁强制开启缓冲保留，快照才能截到真实画面。
-         只改首次创建上下文的参数，之后立即还原，不影响其它 canvas。 */
-      (function(){
-        try{
-          const P = HTMLCanvasElement.prototype, orig = P.getContext;
-          P.getContext = function(type, attrs){
-            /* 持续注入（库会先建一个探测用 canvas，一次性劫持会被它消耗掉）：
-               所有 WebGL 上下文都开启缓冲保留，页面只有 model-viewer 一个 WebGL canvas，代价可忽略 */
-            if(type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl'){
-              attrs = Object.assign({}, attrs || {}, {preserveDrawingBuffer:true});
-            }
-            return orig.call(this, type, attrs);
-          };
-        }catch(e){}
-      })();
-    </script>
-    <script>
-      /* 在模型库还在下载的同时，并行预取当前构件的 GLB —— 两者互不等待，首屏时间取较大值而非相加 */
+      /* 尽早（模型库尚未下载完时）并行预取当前构件 GLB，缩短首屏等待 */
       (function(){try{var q=new URLSearchParams(location.search).get('id');if(q&&/^[A-Za-z0-9_-]+$/.test(q)){var l=document.createElement('link');l.rel='preload';l.as='fetch';l.crossOrigin='anonymous';l.href='models/'+q+'.glb';document.head.appendChild(l);}}catch(e){}})();
     </script>
     <script type="module" defer src="lib/model-viewer.min.js"></script>
@@ -42,155 +20,69 @@
             --e-settle:cubic-bezier(.32,.72,0,1);
             --e-expo:cubic-bezier(.16,1,.3,1);
             --e-leave:cubic-bezier(.5,0,.68,.3);
-            --gs:440px;   /* 光斑直径；颜色已改由 .glow 内三段渐变直接定义 */
-            /* ===== 柔光玻璃材质（iOS 18 Liquid Glass 完整重构）=====
-               与上一版的关键差别，也是"高级感"的真正来源：
-               ① 高光不再是直线渐变 —— 改成沿面板上缘弧面的**镜面光弧**（椭圆 radial，
-                  中心亮、向两侧自然衰减），这才是光打在弯曲玻璃上的真实形状；
-               ② 下缘加**回射光** —— 桌面反射上来的柔光，玻璃因此有厚度而非贴纸；
-               ③ 边缘折射线保留 iOS 的明暗节奏，但色相统一收敛为冷调蓝白（企业风）；
-               ④ 光晕改成**近实远虚三层**：贴边锐亮描边 + 中距柔光 + 远距扩散，
-                  单层光晕只会显得"糊了一圈"，三层才有体积感；
-               ⑤ 底色继续压低，让背景彩光主导面板颜色（lensing 透光感）。 */
-            --g-blur:blur(22px) saturate(1.12) brightness(1.005);
-            --g-sheen: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0));
-            --g-sheen-hd: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0));
-            --g-grain: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0));
-            /* 边缘折射线：企业风统一冷调 —— 顶缘亮蓝白、中段沉入无色、底缘浅钢蓝回光。
-               保留折射线的高/低对比节奏（玻璃厚度感），但去掉暖金对置，色相全部收敛到蓝白 */
-            --g-edge: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,0));
-            /* 三层光晕 + 厚度：①贴边锐亮描边 ②中距柔光 ③远距扩散，
-               再加顶部内高光、下缘内回光与极淡内阴影（玻璃厚度感） */
-            /* 双层投影：贴边细描边 + 大弥散软影，配内层高光/回光做"有厚度的液态玻璃" */
-            --g-inner: inset 0 1px 0 rgba(255,255,255,.85);
+            --gs:230px;--gc1:rgba(182,208,240,.15);--gc2:rgba(214,230,248,.09);
+            /* ===== 浅灰底 + 纯白卡片（小米澎湃OS风格） ===== */
+            --ink:#2c3540; --ink-soft:#8a94a6; --accent:#4a7fd6;
+            --card-bg:#ffffff;
+            --card-shadow:0 2px 12px rgba(0,0,0,.05),0 1px 3px rgba(0,0,0,.04);
+            --card-radius:22px;
+            --bg-base:#f2f3f5;
         }
         * {margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+        /* 触屏功能键：去除连点后残留的蓝色聚焦框/文本选中高亮（蓝方框盖图标），内部 SVG 不拦截点击、不可选中 */
+        .btn,.icon-btn,.fs-ctrl,.mbtn,.abtn,.model-item{
+            -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation;
+        }
+        .btn:focus,.btn:focus-visible,.icon-btn:focus,.icon-btn:focus-visible,.fs-ctrl:focus,.fs-ctrl:focus-visible,
+        .mbtn:focus,.mbtn:focus-visible,.abtn:focus,.abtn:focus-visible,.model-item:focus{outline:none!important;}
+        .btn::-moz-focus-inner,.icon-btn::-moz-focus-inner,.fs-ctrl::-moz-focus-inner{border:0;padding:0;}
+        .btn svg,.icon-btn svg,.fs-ctrl svg,.mbtn svg,.abtn svg,.btn svg *,.icon-btn svg *,.fs-ctrl svg *{pointer-events:none;}
+        .fs-ctrl svg text,.btn svg text{user-select:none;-webkit-user-select:none;}
         html,body{height:100%;overscroll-behavior:none;}
         body {
-            /* 底色保持极淡中性，彩光全部交给下面的极光层，便于统一控制浓度与流动 */
-            background:#f2f3f5;
+            background:var(--bg-base);
             padding:14px;max-width:100%;margin:0 auto;
             font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
             overflow-x:hidden;
-            animation:pageIn .5s var(--e-settle);
+            animation:pageIn .5s cubic-bezier(.22,1,.36,1);
         }
-        /* ===== 环境极光层（iOS 18 壁纸的柔光逻辑）=====
-           iOS 18 的做法是**大尺度弥散 + 极缓流动**：光团覆盖半屏、边缘完全化开，
-           并以数十秒周期缓慢游移 —— 玻璃里的颜色因此是"活"的。
-           性能：radial-gradient 的边缘本身就是完全羽化的，之前再叠 filter:blur(28px)
-           纯属重复劳动（还多养了一张全屏模糊层）；删掉后观感几乎不变，GPU 少一层。
-           动画只走 transform（合成线程），不碰任何触发重绘的属性。 */
-        body::before {
-            display:none;
-            content:'';position:fixed;inset:-18%;z-index:0;pointer-events:none;
-            /* 4 团极淡氛围光：冷蓝 / 青 / 紫 / 暖，浓度克制（.12~.16），透气不发蓝 */
-            background:
-                radial-gradient(46% 42% at 78% 12%, rgba(170,200,244,.07) 0%, rgba(170,200,244,.03) 34%, rgba(170,200,244,0) 66%),
-                radial-gradient(40% 38% at 16% 30%, rgba(168,222,214,.05) 0%, rgba(168,222,214,.02) 34%, rgba(168,222,214,0) 64%),
-                radial-gradient(50% 44% at 88% 74%, rgba(206,186,238,.06) 0%, rgba(206,186,238,.03) 34%, rgba(206,186,238,0) 68%),
-                radial-gradient(42% 38% at 10% 88%, rgba(246,214,180,.05) 0%, rgba(246,214,180,.02) 34%, rgba(246,214,180,0) 64%);
-            animation:ambientDrift 34s ease-in-out infinite alternate;
-            will-change:transform;
-        }
-        @keyframes ambientDrift{
-            0%  {transform:translate3d(0,0,0) scale(1) rotate(0deg);}
-            50% {transform:translate3d(-2.5%,1.8%,0) scale(1.06) rotate(1.2deg);}
-            100%{transform:translate3d(2%,-1.6%,0) scale(1.03) rotate(-1deg);}
-        }
-        /* 尊重系统"减弱动态效果"：iOS/安卓无障碍设置开启时，极光静止，避免不适 */
-        @media (prefers-reduced-motion:reduce){
-            body::before{animation:none;}
-        }
-        /* 氛围光全端缓慢漂移（34s 周期、纯 transform 合成线程播放，成本极低）；
-           仅当系统开启"减弱动态效果"时静止 */
-        @keyframes pageIn {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        /* ===== 跟随光斑（iOS 式棱镜光晕）=====
-           上一版是"一个纯色圆斑"，显得平。iOS 的光斑有三段：
-           ① 中心柔白核 —— 提供照明感；② 中段过渡；③ 外缘极淡钢蓝尾，色相统一蓝白。
-           另外给一点纵向拉伸与旋转，让光斑不是正圆而更像透过玻璃看到的折射区。 */
+        @keyframes pageIn {from{opacity:0;transform:translateY(12px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
         .glow {
-            display:none;
             position:fixed;left:0;top:0;width:var(--gs);height:var(--gs);border-radius:50%;
-            /* 径向渐变的多段停靠点本身就是完全羽化的边缘，不需要再叠 filter:blur ——
-               去掉常驻模糊后，光斑跟随鼠标移动时只是合成层平移，GPU 少一整层全屏模糊 */
-            background:
-                radial-gradient(circle at 50% 50%,
-                    rgba(255,255,255,.50) 0%,
-                    rgba(232,243,255,.30) 14%,
-                    rgba(200,224,250,.17) 28%,
-                    rgba(196,212,240,.11) 42%,
-                    rgba(208,220,242,.075) 56%,
-                    rgba(204,230,250,.045) 70%,
-                    rgba(210,228,250,.02) 82%,
-                    transparent 92%);
+            background:radial-gradient(circle,var(--gc1) 0%,var(--gc2) 40%,transparent 70%);
             pointer-events:none;transform:translate(-50%,-50%);z-index:1;
-            opacity:0;transition:opacity .55s var(--e-settle);will-change:transform,opacity;
+            opacity:0;transition:opacity .55s var(--e-settle),width .5s var(--e-settle),height .5s var(--e-settle);will-change:transform;
         }
         body.in-fs .glow{opacity:0!important;}
-        /* 按下 = 光斑收拢提亮：用内缩的渐变半径实现，不改 width/height（避免重排） */
-        .glow.press{
-            background:
-                radial-gradient(circle at 50% 50%,
-                    rgba(255,255,255,.62) 0%,
-                    rgba(226,240,255,.36) 11%,
-                    rgba(194,220,250,.20) 22%,
-                    rgba(194,210,238,.12) 32%,
-                    rgba(206,218,240,.07) 44%,
-                    rgba(204,228,250,.035) 56%,
-                    transparent 70%);
-        }
-        @media (hover:none){:root{--gs:230px;}}
-        /* ===== 系统无障碍自适应（iOS 26 官方同款行为）=====
-           "降低透明度"开启 → 玻璃转高不透明、色散与外发光收敛（苹果自己的做法，
-           实测能把模糊负载降约 17%，旧手机帧率明显回升）；
-           "减弱动态效果"开启 → 极光静止（上面已处理）+ 快照淡出缩短到近乎直切。 */
-        @media (prefers-reduced-transparency:reduce){
-            :root{
-                --g-blur:blur(0px) saturate(1.15) brightness(1.02);
-                --g-inner:inset 0 1px 0 rgba(255,255,255,.9),0 0 0 .5px rgba(255,255,255,.6),0 8px 28px rgba(110,140,190,.10);
-            }
-            .header{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(250,252,255,.94)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 8px 28px rgba(110,140,190,.10);}
-            body::before{opacity:.4;}
-            .glow{display:none;}
-        }
+        .glow.press{width:calc(var(--gs)*.74);height:calc(var(--gs)*.74);--gc1:rgba(172,202,238,.22);--gc2:rgba(208,228,248,.12);}
+        @media (hover:none){:root{--gs:230px;--gc1:rgba(178,206,242,.19);--gc2:rgba(212,229,248,.10);}}
         .header {
             position:relative;z-index:2;
-            /* 标题框 = 全站材质标杆：弧面镜面高光 + 下缘回射 + 1.5px 对置色散边 + 三层光晕。
-               面板越小，边缘色散越明显（棱镜路径短、分光更集中），所以这里用 1.5px 描边 */
-            background:#fff;
-            color:#1e3a5f;padding:14px 16px;border-radius:22px;text-align:center;margin-bottom:10px;
-            box-shadow:0 1px 4px rgba(15,23,42,.05);
-            border:none;
+            background:var(--card-bg);
+            color:var(--ink);padding:15px 16px;border-radius:var(--card-radius);text-align:center;margin-bottom:10px;
+            box-shadow:0 4px 20px rgba(50,80,130,.07),0 1px 3px rgba(50,80,130,.05);
             transition:opacity .35s ease;
-        }
-        .header::before{
-            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-            padding:1.5px;background:var(--g-edge);
-            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            mask-composite:exclude;
         }
         .header h2 {font-size:17px;font-weight:600;letter-spacing:.5px;}
         .header p {font-size:10px;opacity:.6;margin-top:4px;letter-spacing:2px;font-weight:400;}
         .full-wrap {position:relative;z-index:2;width:100%;}
         .model-container {
             position:relative;width:100%;height:520px;
-            background:#fff;
-            border-radius:26px;overflow:hidden;
-            box-shadow:0 2px 10px rgba(15,23,42,.06);
-            border:none;
-            transition:box-shadow .35s ease,border-color .35s ease;
-        }
-        /* overflow:hidden 会把外扩描边裁掉，折射线画在内缘 */
-        .model-container::before{
-            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:22;
-            padding:1px;background:var(--g-edge);
-            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            mask-composite:exclude;
+            background:var(--card-bg);
+            border-radius:var(--card-radius);overflow:hidden;
+            box-shadow:0 4px 24px rgba(50,80,130,.07),0 1px 3px rgba(50,80,130,.05);
+            transition:box-shadow .35s ease;
         }
         .model-container:hover{
-            box-shadow:var(--g-inner),0 20px 52px rgba(70,100,150,.10), 0 0 34px rgba(226,238,248,.8);
+            box-shadow:0 6px 28px rgba(50,80,130,.1),0 2px 6px rgba(50,80,130,.06);
+        }
+            box-shadow:0 16px 46px rgba(70,100,150,.09), 0 0 26px rgba(255,255,255,.65);
+            border:1px solid rgba(255,255,255,.85);
+            transition:box-shadow .35s ease,border-color .35s ease;
+        }
+        .model-container:hover{
+            border-color:rgba(198,214,240,.85);
+            box-shadow:0 20px 52px rgba(70,100,150,.10), 0 0 34px rgba(226,238,248,.8);
         }
         model-viewer {
             width:100%;height:100%;
@@ -200,12 +92,9 @@
             min-image-width:512;
             camera-orbit:0deg 75deg auto;
             camera-target:0m 0m 0m;
-            /* 注意：field-of-view 写在 CSS 里无效（model-viewer 只认 HTML 属性），
-               之前模型显小就是因为实际跑到了默认 80°；已改到标签属性上锁定 30° */
+            field-of-view:30deg;
             min-field-of-view:5deg;
             max-field-of-view:80deg;
-            polar-min:-90deg;
-            polar-max:270deg;
         }
         model-viewer::part(ar-button),model-viewer::part(default-ar-button){display:none!important;}
         .toolbar{
@@ -214,96 +103,63 @@
             transition:opacity .3s ease;
         }
         .btn{
-            position:relative;width:42px;height:42px;border-radius:12px;
-            background:#fff;
-            color:#fff;border:none;
+            width:42px;height:42px;border-radius:50%;
+            background:linear-gradient(145deg,rgba(255,255,255,.84),rgba(224,238,252,.62));
+            backdrop-filter:blur(24px) saturate(220%);
+            -webkit-backdrop-filter:blur(24px) saturate(220%);
+            color:#2563a8;border:1px solid rgba(255,255,255,.94);
             font-size:18px;cursor:pointer;
-            box-shadow:0 2px 8px rgba(15,23,42,.10);
-            transition:transform .22s var(--e-settle),box-shadow .3s ease,background .25s ease,filter .2s ease;
+            box-shadow:0 4px 14px rgba(50,100,180,.12),inset 0 1px 1px rgba(255,255,255,.92),0 0 0 1px rgba(150,190,255,.16),0 0 14px rgba(150,190,255,.24);
+            transition:transform .28s cubic-bezier(.32,.72,0,1),box-shadow .3s ease,background .25s ease;
             display:flex;align-items:center;justify-content:center;
         }
-        .btn::before{
-            content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;
-            padding:1px;background:var(--g-edge);
-            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            mask-composite:exclude;
-        }
-        .btn:active{transform:scale(.9);transition-duration:.1s;}
-        .btn:active::after{content:"";position:absolute;inset:0;border-radius:inherit;background:rgba(0,0,0,.13);pointer-events:none;}
-        /* 悬停 = 小而聚的近白边缘光 + 轻微上浮（不铺大范围蓝光，绽放留给按下） */
-        .btn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(15,23,42,.16);}
-        .btn.active{filter:brightness(1.15);box-shadow:0 0 0 2px rgba(255,255,255,.92),0 0 0 4.5px rgba(74,127,214,.55),0 4px 14px rgba(15,23,42,.18);}
-        /* 呼吸光晕：独立伪元素只动 opacity（合成线程），绝不动画 box-shadow ——
-           后者每帧重绘按钮并连带重合成底下的 WebGL 画布，是"页面静止也隐隐发卡"的元凶。
-           按钮带 overflow:hidden（按压波纹需要），光晕画在内圈、用静态外发光补外圈 */
-        .btn.active::after{
-            content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:1;
-            background:radial-gradient(circle at 50% 44%, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 38%, rgba(170,205,255,.34) 62%, rgba(190,216,255,.10) 80%, rgba(190,216,255,0) 92%);
-            animation:activeBreath 2.8s ease-in-out infinite;will-change:opacity;
-        }
-        .btn.active>svg,.btn.active>span{position:relative;z-index:2;}
-        @keyframes activeBreath{0%,100%{opacity:.35;}50%{opacity:.95;}}
+        .btn:active{transform:scale(.9);transition:transform .11s ease-out;}
+        .btn:hover{border-color:#fff;box-shadow:0 6px 20px rgba(50,100,180,.2),inset 0 1px 1px #fff,0 0 0 1px rgba(150,190,255,.34),0 0 24px rgba(150,190,255,.55);}
+        .btn.active{background:linear-gradient(145deg,rgba(214,234,254,.98),rgba(184,214,248,.92));color:#1d5fae;border-color:rgba(255,255,255,1);box-shadow:0 0 0 2.5px rgba(123,168,240,.42),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 22px rgba(150,190,255,.6);animation:activeBreath 2.8s ease-in-out infinite;}
+        @keyframes activeBreath{0%,100%{box-shadow:0 0 0 2.5px rgba(123,168,240,.42),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 20px rgba(150,190,255,.5);}50%{box-shadow:0 0 0 2.5px rgba(123,168,240,.30),0 6px 18px rgba(90,140,210,.24),inset 0 1px 2px #fff,0 0 28px rgba(150,190,255,.72);}}
         .tip-banner{
             position:absolute;left:50%;transform:translateX(-50%) translateY(-8px);
             top:20px;z-index:21;color:#2563a8;font-size:12px;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.94);
-            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
+            background:rgba(255,255,255,.85);backdrop-filter:blur(24px);
             padding:8px 18px;border-radius:26px;white-space:nowrap;
-            box-shadow:var(--g-inner),0 8px 24px rgba(50,100,180,.15);
-            border:1px solid transparent;
+            box-shadow:0 8px 24px rgba(50,100,180,.15);
             opacity:0;pointer-events:none;
-            transition:opacity .32s ease, transform .45s var(--e-settle);
+            transition:opacity .35s ease, transform .45s cubic-bezier(.22,1,.36,1);
         }
         .tip-banner.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
         .toast{
-            position:fixed;left:50%;top:50%;transform:translate(-50%,calc(-50% + 8px));
+            position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);
             z-index:9300;color:#2563a8;font-size:14px;font-weight:500;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.95);
-            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
+            background:rgba(255,255,255,.92);backdrop-filter:blur(28px);
             padding:14px 28px;border-radius:26px;
-            box-shadow:var(--g-inner),0 16px 48px rgba(50,100,180,.25);
-            border:1px solid transparent;
+            box-shadow:0 16px 48px rgba(50,100,180,.25);
             opacity:0;pointer-events:none;
-            transition:opacity .26s ease, transform .42s var(--e-settle);
+            transition:opacity .3s ease, transform .35s cubic-bezier(.22,1,.36,1);
         }
-        .toast.show{opacity:1;transform:translate(-50%,-50%);}
+        .toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
         .model-list{
             position:fixed;left:0;right:0;bottom:0;z-index:9201;
             display:flex;flex-direction:column;
             height:52vh;max-height:70vh;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.96);
-            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
-            border-radius:28px 28px 0 0;border-top:1px solid rgba(255,255,255,.95);
+            background:rgba(246,249,252,.85);
+            backdrop-filter:blur(40px) saturate(200%);-webkit-backdrop-filter:blur(40px) saturate(200%);
+            border-radius:28px 28px 0 0;border-top:1px solid rgba(255,255,255,.9);
             transform:translateY(105%);transition:transform .56s var(--e-settle),height .42s var(--e-settle);
-            box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 -14px 50px rgba(50,100,180,.22);
+            box-shadow:0 -14px 50px rgba(50,100,180,.28),0 0 40px rgba(140,180,255,.18);
         }
         .model-list.show{transform:translateY(0);}
         .model-list .drag-handle{width:38px;height:4px;border-radius:2px;background:rgba(100,140,200,.28);margin:0 auto 10px;flex:0 0 auto;}
         .ml-title{color:#1e3a5f;font-size:15px;font-weight:600;text-align:center;margin:0 0 10px;flex:0 0 auto;}
         .ml-count{font-size:11px;font-weight:500;color:#6f93c8;background:rgba(123,168,240,.16);padding:2px 9px;border-radius:20px;margin-left:6px;vertical-align:1px;}
         .ml-search{position:relative;flex:0 0 auto;margin:0 2px 10px;}
-        .ml-search input{width:100%;box-sizing:border-box;height:40px;border-radius:20px;border:1px solid transparent;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.88);
-            backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+        .ml-search input{width:100%;box-sizing:border-box;height:40px;border-radius:20px;border:1px solid rgba(255,255,255,.9);
+            background:rgba(255,255,255,.62);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
             padding:0 38px 0 38px;font-size:13px;color:#1e3a5f;outline:none;
-            box-shadow:var(--g-inner),0 4px 14px rgba(50,100,180,.08);
+            box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 4px 14px rgba(50,100,180,.08);
             transition:border-color .25s ease,box-shadow .25s ease,background .25s ease;}
         .ml-search input::placeholder{color:#8aa6cc;}
-        .ml-search input:focus{border-color:rgba(123,168,240,.75);background:rgba(255,255,255,.96);
-            box-shadow:inset 0 1px 1px #fff,0 0 0 3px rgba(123,168,240,.14);}
+        .ml-search input:focus{border-color:rgba(123,168,240,.75);background:rgba(255,255,255,.82);
+            box-shadow:inset 0 1px 1px #fff,0 0 0 3px rgba(123,168,240,.18),0 0 18px rgba(150,190,255,.4);}
         .ml-sicon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#7ea3d4;pointer-events:none;}
         .ml-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;
             border:none;background:rgba(120,155,210,.22);color:#5b86c0;display:grid;place-items:center;cursor:pointer;}
@@ -319,25 +175,22 @@
         .ml-empty.on{display:block;animation:softIn .35s ease backwards;}
         .model-item{position:relative;overflow:hidden;
             padding:8px 11px;border-radius:13px;cursor:pointer;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                linear-gradient(150deg,rgba(255,255,255,.96),rgba(248,251,255,.92));
+            background:linear-gradient(150deg,rgba(255,255,255,.78),rgba(231,240,252,.6));
             border:1px solid rgba(255,255,255,.92);
-            box-shadow:var(--g-inner),0 4px 14px rgba(50,100,180,.1);
+            box-shadow:0 4px 14px rgba(50,100,180,.1),inset 0 1px 1px rgba(255,255,255,.9),0 0 0 1px rgba(150,190,255,.08);
             opacity:0;transform:translateY(14px);
             transition:opacity .38s ease,transform .24s var(--e-settle),box-shadow .26s ease,border-color .26s ease,background .26s ease;}
         .model-list.show .model-item{opacity:1;transform:translateY(0);}
         /* 按压：描边整体亮起一圈柔光环 + 边框发光扩散 */
-        .model-item.pressing{border-color:rgba(255,255,255,.98);transform:scale(.965);
-            box-shadow:0 0 0 2px rgba(123,168,240,.28),0 0 16px 2px rgba(150,185,240,.42),inset 0 1px 2px #fff;}
+        .model-item.pressing{border-color:rgba(150,190,255,.95);transform:scale(.965);
+            box-shadow:0 0 0 2px rgba(123,168,240,.34),0 0 18px 3px rgba(150,190,255,.5),inset 0 1px 2px #fff;}
         .model-item.fadeout{transition:box-shadow .5s ease,border-color .5s ease,transform .3s var(--e-settle);}
-        @media(hover:hover){.model-item:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.92);
-            box-shadow:0 10px 26px rgba(50,100,180,.16),inset 0 1px 1px #fff,0 0 0 1px rgba(150,185,240,.26);}}
+        @media(hover:hover){.model-item:hover{transform:translateY(-2px);border-color:rgba(150,190,255,.75);
+            box-shadow:0 10px 26px rgba(50,100,180,.18),inset 0 1px 1px #fff,0 0 0 1px rgba(150,190,255,.3),0 0 22px rgba(150,190,255,.5);}}
         .model-item:active{transform:scale(.96);transition-duration:.08s;}
-        .model-item.current{border-color:rgba(255,255,255,1);
-            background:linear-gradient(156deg,rgba(228,240,255,.96),rgba(208,228,252,.78));
-            box-shadow:0 8px 22px rgba(50,100,180,.16),inset 0 1px 1px #fff,0 0 0 1.5px rgba(123,168,240,.42),0 0 22px -4px rgba(140,180,255,.6);}
+        .model-item.current{border-color:rgba(123,168,240,.85);
+            background:linear-gradient(150deg,rgba(225,238,255,.95),rgba(210,228,252,.78));
+            box-shadow:0 8px 22px rgba(50,100,180,.2),inset 0 1px 1px #fff,0 0 0 1.5px rgba(123,168,240,.55),0 0 20px rgba(140,180,255,.5);}
         .model-item .cur-badge{position:absolute;top:6px;right:8px;font-size:9px;color:#fff;background:linear-gradient(135deg,#5b90e0,#2563a8);
             padding:2px 7px;border-radius:10px;letter-spacing:.5px;box-shadow:0 3px 8px rgba(37,99,168,.4);}
         .model-item .mid{color:#1e3a5f;font-size:12px;font-weight:600;padding-right:32px;line-height:1.3;}
@@ -379,121 +232,83 @@
         @keyframes spin{to{transform:rotate(360deg)}}
         .error{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,.92);flex-direction:column;align-items:center;justify-content:center;z-index:10;color:#557;}
         .info-card{
-            position:relative;
-            background:#fff;
-            padding:14px 18px 6px;border-radius:26px;margin-top:14px;
-            display:flex;flex-direction:column;gap:0;
-            box-shadow:0 2px 10px rgba(15,23,42,.06);
-            border:none;
-            transition:opacity .4s ease, transform .45s var(--e-settle), box-shadow .35s ease, border-color .35s ease;
+            background:rgba(246,249,252,.6);
+            backdrop-filter:blur(36px) saturate(220%);
+            -webkit-backdrop-filter:blur(36px) saturate(220%);
+            padding:18px;border-radius:26px;margin-top:14px;
+            display:flex;flex-direction:column;gap:9px;
+            box-shadow:0 12px 40px rgba(70,100,150,.07), 0 0 24px rgba(255,255,255,.6);
+            border:1px solid rgba(255,255,255,.85);
+            transition:opacity .4s ease, transform .45s cubic-bezier(.22,1,.36,1), box-shadow .35s ease, border-color .35s ease;
         }
+        /* 整个信息卡外框：悬停泛起大范围柔紫蓝光晕（区别于小格局部光） */
         .info-card:hover{
-            box-shadow:0 4px 18px rgba(15,23,42,.09);
+            border-color:rgba(198,214,240,.85);
+            box-shadow:0 16px 48px rgba(60,92,140,.12), 0 0 40px rgba(202,220,244,.30), 0 0 24px rgba(206,224,246,.18);
         }
-        .info-card h3{color:#1e3a5f;font-size:16px;margin-bottom:6px;padding:0 14px 12px;border-bottom:1px solid #eef0f4;font-weight:600;}
-        /* iOS 分组列表：一张白卡，行间细分隔线（左缩进对齐文字），不是每行独立圆框 */
+        .info-card h3{color:#2c3540;font-size:16px;margin-bottom:4px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06);font-weight:600;}
         .info-card .row{
             position:relative;overflow:hidden;
             display:flex;align-items:center;
-            padding:12px 14px;border-radius:0;font-size:14px;line-height:1.5;
-            background:transparent;
-            border:none;
-            transition:background .25s ease;
+            padding:11px 14px;border-radius:12px;font-size:14px;line-height:1.5;
+            background:rgba(255,255,255,.5);
+            border:1px solid rgba(255,255,255,.75);
+            transition:box-shadow .3s ease,border-color .3s ease,background .3s ease;
         }
-        .info-card .row + .row::after{
-            content:'';position:absolute;left:14px;right:0;top:0;height:1px;background:#eef0f4;pointer-events:none;
-        }
-        .info-card .k{width:92px;color:#6088b8;flex-shrink:0;font-weight:400;}
-        .info-card .v{flex:1;color:#1e3a5f;word-break:break-all;font-weight:500;}
-        .footer{position:relative;z-index:2;text-align:center;color:#7098c8;font-size:11px;margin-top:18px;line-height:1.7;transition:opacity .3s;}
+        .info-card .k{width:92px;color:#8a94a6;flex-shrink:0;font-weight:400;}
+        .info-card .v{flex:1;color:#2c3540;word-break:break-all;font-weight:500;}
+        .footer{text-align:center;color:#7a8494;font-size:10px;margin-top:10px;line-height:1.6;transition:opacity .3s;background:#ffffff;border-radius:14px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.04);}
 
         /* ===== 全屏背景遮罩 ===== */
         .fs-bg{
             position:fixed;inset:0;z-index:8999;pointer-events:none;
-            background:#f2f3f5;
+            background:#eef0f4;
             opacity:0;transition:opacity .5s cubic-bezier(.22,.61,.36,1);
         }
-        /* ===== 进出场快照层：静态克隆（3D 换成图片），所有过渡只发生在它身上 =====
-           两层设计各治一种毛病：
-           ① 快照整体垫不透明底色 —— 它内部的玻璃面板原本是半透明的，淡出时底下真实画面
-              会透上来与快照内容叠成"双层影"，垫底后快照就是一张完整照片，叠影从源头消失；
-           ② 淡出时同步加模糊 —— 交叉淡化中段两层同时可见是不可避免的，用逐渐散开的焦外
-              把边界糊掉，观感从"两张图重叠"变成"一张图柔化消散"，这就是闪影感的根治手段。
-           动画一律走 CSS 关键帧而非 requestAnimationFrame：模型解码会阻塞主线程、页面切后台
-           时 rAF 会被限流，而 CSS 动画在合成线程照常播放，不会卡在半路留下残影。 */
+        /* ===== 进出场快照幽灵层：克隆当前画面做交叉淡化，模型用静态截图替换 ===== */
         .fs-ghost *:not(.fs-shot){animation:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
-        .fs-ghost{box-sizing:border-box;will-change:opacity,filter,transform;
-            backface-visibility:hidden;-webkit-backface-visibility:hidden;
-            background:#f2f3f5;
-        }
+        .fs-ghost{box-sizing:border-box;will-change:opacity,filter,transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;}
         .fs-ghost img{display:block;background:transparent;}
-        /* 插入首个合成帧即自动播放，时长由 JS 用 --gd 注入；up/down 决定轻微漂移方向。
-           淡出同步加模糊（blur 0→8px）：交叉淡化中段两层画面必然同时可见，
-           逐渐散开的焦外把交叠边界糊掉，观感从"两张图重叠"变成"一张图柔化消散" —— 闪影感的根治手段 */
-        .fs-ghost.fs-go{animation:fsGhostFade var(--gd,420ms) var(--xf,cubic-bezier(.33,0,.22,1)) forwards!important;}
+        /* 纯 CSS 自动淡出：快照一旦插入即从首个合成帧柔化消散，不依赖 JS 帧（模型复位阻塞主线程/切后台也能跑），杜绝残影 */
+        .fs-ghost.fs-go{animation:fsGhostFade var(--gd,420ms) cubic-bezier(.33,0,.22,1) forwards!important;}
         .fs-ghost.fs-go.down{animation-name:fsGhostFadeDn!important;}
-        /* 模型截图更快先行淡离：它是快照里最"实"的一块，先化掉可避免残留成方块 */
-        .fs-ghost img.fs-shot{animation:fsGhostShot .2s cubic-bezier(.33,0,.3,1) forwards!important;}
-        @keyframes fsGhostFade{
-            0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}
-            34%{opacity:.55;filter:blur(3px);}
-            100%{opacity:0;filter:blur(8px);transform:translateY(-3px) scale(.982);}
+        .fs-ghost img.fs-shot{animation:fsGhostShot .22s cubic-bezier(.33,0,.3,1) forwards!important;}
+        @keyframes fsGhostFade{0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}34%{opacity:.55;filter:blur(3px);}100%{opacity:0;filter:blur(8px);transform:translateY(-3px) scale(.982);}}
+        @keyframes fsGhostFadeDn{0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}34%{opacity:.55;filter:blur(3px);}100%{opacity:0;filter:blur(8px);transform:translateY(4px) scale(.982);}}
+        @keyframes fsGhostShot{0%{opacity:1;filter:blur(0);transform:scale(1);}100%{opacity:0;filter:blur(16px);transform:scale(.982);}}
+        /* ===== 移动端性能优化：降低 blur 强度（filter:blur 在手机 GPU 上很耗） ===== */
+        @media (pointer:coarse), (max-width:768px){
+            @keyframes fsGhostFade{0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}40%{opacity:.5;filter:blur(1.5px);}100%{opacity:0;filter:blur(3px);transform:translateY(-3px) scale(.99);}}
+            @keyframes fsGhostFadeDn{0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}40%{opacity:.5;filter:blur(1.5px);}100%{opacity:0;filter:blur(3px);transform:translateY(4px) scale(.99);}}
+            @keyframes fsGhostShot{0%{opacity:1;filter:blur(0);transform:scale(1);}100%{opacity:0;filter:blur(4px);transform:scale(.99);}}
         }
-        @keyframes fsGhostFadeDn{
-            0%{opacity:1;filter:blur(0);transform:translateY(0) scale(1);}
-            34%{opacity:.55;filter:blur(3px);}
-            100%{opacity:0;filter:blur(8px);transform:translateY(4px) scale(.982);}
-        }
-        @keyframes fsGhostShot{
-            0%{opacity:1;filter:blur(0);transform:scale(1);}
-            100%{opacity:0;filter:blur(16px);transform:scale(.982);}
-        }
-        /* 收缩型淡出（构件全屏进/退用）：终点缩放由 --gsc 注入 = 卡片实际比例，
-           与底下真实卡片像素级重合，交接帧完全看不出来。同样带模糊消散 */
-        .fs-ghost.fs-collapse{animation:fsGhostCollapse var(--gd,440ms) var(--xf,cubic-bezier(.33,0,.22,1)) forwards!important;}
-        @keyframes fsGhostCollapse{
-            0%{opacity:1;filter:blur(0);transform:scale(1);}
-            38%{opacity:.82;filter:blur(4px);}
-            100%{opacity:0;filter:blur(10px);transform:scale(var(--gsc,.3));}
-        }
-
         /* ===== 全屏控制按钮层 ===== */
         .fs-ctrl-layer{position:fixed;inset:0;z-index:9100;pointer-events:none;}
         .fs-ctrl{
-            position:absolute;width:46px;height:46px;border-radius:13px;
-            background:#fff;
-            border:none;
-            box-shadow:0 4px 16px rgba(15,23,42,.14);
+            position:absolute;width:46px;height:46px;border-radius:50%;
+            background:linear-gradient(145deg,rgba(255,255,255,.92),rgba(238,244,250,.62));backdrop-filter:blur(24px) saturate(170%);
+            -webkit-backdrop-filter:blur(24px) saturate(170%);
+            border:1px solid rgba(255,255,255,.88);
+            box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.7),0 0 16px rgba(255,255,255,.75),0 0 28px rgba(206,226,246,.22);
             display:flex;align-items:center;justify-content:center;
             cursor:pointer;color:#2563a8;pointer-events:auto;
             opacity:0;transform:scale(.92) translateY(8px);
             transition:opacity .42s var(--e-expo), transform .56s var(--e-settle), background .25s ease, color .25s ease,
                        left .52s var(--e-settle), right .52s var(--e-settle), top .52s var(--e-settle), bottom .52s var(--e-settle);
         }
-        .fs-ctrl::before{
-            content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;
-            padding:1px;background:var(--g-edge);
-            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            mask-composite:exclude;
+        .fs-ctrl.show{opacity:1;transform:scale(1) translateY(0);animation:ctrlGlow 5.6s ease-in-out .9s infinite;}
+        @keyframes ctrlGlow{
+            0%,100%{box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.65),0 0 14px rgba(255,255,255,.6),0 0 24px rgba(206,226,246,.18);}
+            50%{box-shadow:0 10px 30px rgba(70,100,150,.10),inset 0 1px 2px rgba(255,255,255,1),inset 0 -2px 6px rgba(214,226,240,.14),0 0 0 1px rgba(255,255,255,.85),0 0 22px rgba(255,255,255,.95),0 0 40px rgba(214,230,246,.30),0 0 60px rgba(220,234,248,.18);}
         }
-        /* 呼吸光同样不再动画 box-shadow（每帧重绘）：改由 ::after 内圈光斑只动 opacity，
-           合成线程播放，全屏六键同开也不占主线程 */
-        .fs-ctrl.show{opacity:1;transform:scale(1) translateY(0);}
-        .fs-ctrl.show::after{
-            content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:1;
-            background:radial-gradient(circle at 50% 42%, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 40%, rgba(255,255,255,.34) 64%, rgba(206,218,236,.12) 82%, rgba(206,218,236,0) 94%);
-            animation:ctrlGlow 5.6s ease-in-out .9s infinite;will-change:opacity;
-        }
-        .fs-ctrl.show>svg,.fs-ctrl.show>span{position:relative;z-index:2;}
-        @keyframes ctrlGlow{0%,100%{opacity:.4;}50%{opacity:1;}}
-        .fs-ctrl:active{transform:scale(.88);}
-        .fs-ctrl:active::after{content:"";position:absolute;inset:0;border-radius:inherit;background:rgba(0,0,0,.10);pointer-events:none;}
+        .fs-ctrl:active{transform:scale(.85);}
         .fs-exit{top:calc(16px + env(safe-area-inset-top));left:16px;right:auto;bottom:auto;}
         .fs-pagebtn,.fs-modelbtn{top:calc(16px + env(safe-area-inset-top));right:16px;left:auto;bottom:auto;}
         .fs-rotate{bottom:calc(78px + env(safe-area-inset-bottom));right:16px;left:auto;top:auto;}
         .fs-panbtn{bottom:calc(20px + env(safe-area-inset-bottom));right:16px;left:auto;top:auto;}
         .fs-eye{top:calc(16px + env(safe-area-inset-top));right:70px;left:auto;bottom:auto;}
+        /* 构件全屏：360自由旋转按钮放在“隐藏构件信息(眼睛)”左侧，避免与左上角返回键重合 */
+        .fs-ctrl-layer > .fs-freebtn{top:calc(16px + env(safe-area-inset-top));right:124px;left:auto;bottom:auto;}
         /* 横屏映射（内容顺旋90°，用户逆旋手机观看）：视觉左上=物理右上、视觉右上=物理右下、
            视觉右下=物理左下、视觉左下=物理左上；按键图标同顺旋90°在视觉里保持正读 */
         .fs-ctrl-layer.fs-ls .fs-ctrl.show{transform:rotate(90deg);}
@@ -503,6 +318,7 @@
         .fs-ls .fs-rotate{bottom:16px;left:70px;top:auto;right:auto;}
         .fs-ls .fs-panbtn{top:auto;bottom:16px;left:16px;right:auto;}
         .fs-ls .fs-eye{top:auto;bottom:16px;right:16px;left:auto;}
+        .fs-ctrl-layer.fs-ls > .fs-freebtn{top:auto;bottom:16px;right:70px;left:auto;}
         /* 横屏信息卡：顺旋90°贴视觉左下角（物理左上角），两列字段收成一小块，正读 */
         .full-wrap.model-backdrop.ls-card .info-card{
             top:0;left:0;right:auto;bottom:auto;
@@ -519,7 +335,7 @@
         /* 悬浮眼睛按钮：收起信息时显示小红点提示 */
         .fs-eye .eye-badge{display:none;position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:#e0566b;box-shadow:0 0 8px rgba(224,86,107,.8);}
         .fs-eye.collapsed .eye-badge{display:block;}
-        .fs-ctrl.active{filter:brightness(1.15);box-shadow:0 0 0 2px rgba(255,255,255,.92),0 0 0 4.5px rgba(74,127,214,.55),0 4px 14px rgba(15,23,42,.16);}
+        .fs-ctrl.active{background:linear-gradient(145deg,rgba(206,229,252,.97),rgba(172,206,244,.92));color:#1d5fae;border-color:#fff;box-shadow:0 0 0 2.5px rgba(123,168,240,.4),0 6px 18px rgba(90,140,210,.25),0 0 22px rgba(150,190,255,.6);}
         .icon-btn.active{color:#1d5fae;border-color:rgba(150,190,255,.9);background:linear-gradient(145deg,rgba(214,234,254,.98),rgba(184,214,248,.9));box-shadow:0 0 0 2px rgba(123,168,240,.35),0 0 16px rgba(150,190,255,.55);}
         /* ===== 网页全屏右侧功能 dock：信息显示时偏小，眼睛隐藏信息后整体放大 ===== */
         .fs-dock{position:absolute;right:12px;top:38%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px;pointer-events:auto;transition:top .54s var(--e-settle),gap .45s var(--e-settle);}
@@ -537,40 +353,42 @@
         }
         .full-wrap.fs-page .model-container{
             flex:1 1 auto;height:auto!important;min-height:0;border-radius:20px;
-            box-shadow:0 18px 54px rgba(70,100,150,.12);
+            box-shadow:0 4px 20px rgba(50,80,130,.08),0 1px 3px rgba(50,80,130,.05);
         }
         .full-wrap.fs-page .info-card{
             flex:0 0 auto;margin-top:0;
             max-height:60vh;overflow:hidden;
             padding:8px 11px 10px;border-radius:18px;
             display:grid;grid-template-columns:1fr 1fr;gap:5px 9px;
-            transition:opacity .4s ease, max-height .48s var(--e-settle),
-                     padding .48s var(--e-settle),
+            transition:opacity .4s ease, max-height .48s cubic-bezier(.22,1,.36,1),
+                     padding .48s cubic-bezier(.22,1,.36,1),
                      border-width .48s ease, margin .48s ease;
-            animation:fsCardIn .52s var(--e-settle) .1s backwards;
+            animation:fsCardIn .56s cubic-bezier(.22,1,.36,1) .12s backwards;
         }
         .full-wrap.fs-page .info-card h3{
             grid-column:1/-1;font-size:12px;margin-bottom:0;padding-bottom:4px;
         }
-        /* 全屏两列小格：纵向排版，grid 布局用浅灰圆角底区分格子 */
+        /* 全屏两列小格：纵向排版（其余外观沿用通用小格） */
         .full-wrap.fs-page .info-card .row{
             flex-direction:column;align-items:flex-start;gap:1px;
-            padding:6px 10px;border-radius:10px;line-height:1.25;
-            background:#f6f7f9;
+            padding:4px 10px;border-radius:10px;line-height:1.25;
         }
-        /* 悬停：只在小格边缘泛起一小圈雾蓝柔光（普通页与全屏通用） */
-        /* 悬停 = 淡灰底（设置页观感），点击 = 淡蓝整格点亮 */
+        /* 悬停：小格浅灰微光 */
         .info-card .row:hover{
-            background:#f5f7fa;
+            border-color:rgba(0,0,0,.08);
+            background:#f7f8fa;
+            box-shadow:0 2px 8px rgba(0,0,0,.06);
         }
         .info-card .row .ripple{
             position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;pointer-events:none;
-            background:radial-gradient(circle,rgba(20,30,50,.10) 0%,rgba(20,30,50,.04) 55%,transparent 72%);
+            background:radial-gradient(circle,rgba(255,255,255,.8) 0%,rgba(200,210,225,.3) 46%,transparent 70%);
             transform:translate(-50%,-50%) scale(0);
-            animation:cellRipple .7s var(--e-settle) forwards;
+            animation:cellRipple .7s cubic-bezier(.22,1,.36,1) forwards;
         }
+        /* 点击：浅灰柔光 */
         .info-card .row.lit{
-            background:#eaf1fb;border-color:#dce7f6;
+            border-color:rgba(0,0,0,.1);background:#eef1f5;
+            box-shadow:0 2px 10px rgba(0,0,0,.08);
         }
         @keyframes cellRipple{
             0%{transform:translate(-50%,-50%) scale(0);opacity:.9;}
@@ -578,9 +396,11 @@
         }
         .model-container.fs-tap{
             transition:box-shadow .32s ease;
-            box-shadow:0 0 0 2px rgba(120,150,190,.28),0 8px 28px rgba(15,23,42,.12)!important;
-        }        .full-wrap.fs-page .model-container:hover{
-            box-shadow:0 10px 32px rgba(15,23,42,.10);
+            box-shadow:0 0 0 2px rgba(0,0,0,.08),0 4px 20px rgba(0,0,0,.1)!important;
+        }
+        .full-wrap.fs-page .model-container:hover{
+            border-color:rgba(0,0,0,.06);
+            box-shadow:0 6px 24px rgba(50,80,130,.1),0 2px 6px rgba(50,80,130,.06);
         }
         @keyframes fsCardIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
         /* 退出全屏时信息卡先柔和淡出，避免两列小格被挤压变形 */
@@ -598,13 +418,10 @@
         .full-wrap.fs-page .info-card .row{justify-content:flex-start;}
         #btnEyeInline{display:none;}
         .full-wrap.fs-page #btnEyeInline{display:grid;}
-        /* 隐藏/显示构件信息：展开与收起用两套时序（方向错时），
-           展开=先撑高度后浮内容；收起=先淡内容后收高度 —— 文字永远不会被"拖着挤" */
-        .full-wrap.fs-page .info-card{transition:opacity .3s ease .14s,max-height .52s var(--e-settle),padding .52s var(--e-settle),margin .52s var(--e-settle),border-width .52s ease;}
+        .full-wrap.fs-page .info-card{transition:opacity .24s cubic-bezier(.25,.7,.35,1),max-height .22s cubic-bezier(.25,.7,.35,1),padding .22s cubic-bezier(.25,.7,.35,1),margin .22s cubic-bezier(.25,.7,.35,1),border-width .18s ease;}
         .full-wrap.fs-page.info-collapsed .info-card{
             max-height:0;opacity:0;padding-top:0;padding-bottom:0;
-            margin-top:0;border-width:0;pointer-events:none;
-            transition:opacity .2s ease,max-height .5s var(--e-settle),padding .5s var(--e-settle),margin .5s var(--e-settle),border-width .5s ease;}
+            margin-top:0;border-width:0;pointer-events:none;}
         /* 模型一键全屏：铺满无圆角 */
         .model-container.fs-model{border-radius:0;border-width:0;}
         .model-container.fs-model .toolbar{opacity:0;pointer-events:none;}
@@ -615,20 +432,16 @@
             position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9001;
             width:min(320px,64vw);max-height:58vh;overflow:hidden;margin-top:0;padding:10px 12px 8px;gap:5px;
             display:flex;flex-direction:column;border-radius:18px;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.94);
-            border:1px solid rgba(255,255,255,.8);
-            box-shadow:var(--g-inner),-10px 16px 40px rgba(70,100,150,.10);
-            backdrop-filter:blur(22px) saturate(180%) brightness(1.04)!important;-webkit-backdrop-filter:blur(22px) saturate(180%) brightness(1.04)!important;
+            background:rgba(248,251,253,.62);border:1px solid rgba(255,255,255,.8);
+            box-shadow:-10px 16px 40px rgba(70,100,150,.09),0 0 22px rgba(255,255,255,.55);
+            backdrop-filter:blur(22px) saturate(180%)!important;-webkit-backdrop-filter:blur(22px) saturate(180%)!important;
             -webkit-mask-image:linear-gradient(95deg,#000 0%,#000 55%,rgba(0,0,0,.62) 78%,transparent 100%),linear-gradient(#000 0,#000 calc(100% - 26px),transparent 100%);
             -webkit-mask-composite:source-in;mask-composite:intersect;
             mask-image:linear-gradient(95deg,#000 0%,#000 55%,rgba(0,0,0,.62) 78%,transparent 100%),linear-gradient(#000 0,#000 calc(100% - 26px),transparent 100%);
-            pointer-events:none;animation:miniCardIn .56s var(--e-settle) .12s backwards;
+            pointer-events:none;animation:miniCardIn .66s var(--e-settle) .16s backwards;
         }
         @supports ((mask-composite:intersect) or (-webkit-mask-composite:source-in)){
-            .full-wrap.model-backdrop .info-card{border-radius:18px 0 0 18px;border-right:none;}
+            .full-wrap.model-backdrop .info-card{border-radius:20px!important;}
         }
         @keyframes miniCardIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
         .full-wrap.model-backdrop .info-head{padding:2px 4px 6px;margin:0;background:transparent;border:none;box-shadow:none;pointer-events:none;}
@@ -636,61 +449,45 @@
         .full-wrap.model-backdrop .info-head .info-tools{display:none;}
         .full-wrap.model-backdrop .info-card .row{
             padding:5px 10px;border-radius:10px;font-size:12px;line-height:1.35;
-            background:#f6f7f9;border:none;box-shadow:none;gap:8px;
+            background:rgba(255,255,255,.56);border:1px solid rgba(255,255,255,.74);box-shadow:none;gap:8px;
         }
         .full-wrap.model-backdrop .info-card .k{width:68px;min-width:0;font-size:11px;}
         .full-wrap.model-backdrop .info-card .v{font-size:12px;font-weight:600;text-shadow:none;}
         .full-wrap.model-backdrop .model-container{background:transparent;}
         .full-wrap.model-backdrop.info-collapsed .info-card{opacity:0 !important;pointer-events:none;}
-        body.in-fs .full-wrap.model-backdrop .info-card{backdrop-filter:blur(20px) saturate(1.15)!important;-webkit-backdrop-filter:blur(20px) saturate(1.15)!important;}
+        body.in-fs .full-wrap.model-backdrop .info-card{backdrop-filter:blur(18px) saturate(170%)!important;-webkit-backdrop-filter:blur(18px) saturate(170%)!important;}
         body.in-fs .header,body.in-fs .footer{opacity:0;pointer-events:none;}
-        /* 全屏背景不透明，毛玻璃模糊无视觉作用且逐帧重算很贵，整段关闭以保证动画流畅；
-           但保留顶部柔泽与磨砂微粒，材质观感不丢 */
+        /* 全屏背景不透明，毛玻璃模糊无视觉作用且逐帧重算很贵，整段关闭以保证动画流畅 */
         body.in-fs .model-container,
         body.in-fs .info-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
-        body.in-fs .model-container{background:var(--g-grain),var(--g-sheen),rgba(255,255,255,.94);}
-        body.in-fs .info-card{background:var(--g-grain),var(--g-sheen),rgba(255,255,255,.95);}
+        body.in-fs .model-container{background:rgba(244,248,251,.5);}
+        body.in-fs .info-card{background:rgba(247,250,253,.62);}
+        /* 进/出全屏过渡只走 transform，提升为合成层，避免重排重绘卡顿 */
+        .full-wrap.fs-anim, .model-container.fs-anim{will-change:transform;}
+
         /* ===== 信息卡标题行工具按钮（复制 / 管理员） ===== */
         .info-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;padding-bottom:12px;border-bottom:1px solid rgba(50,100,180,.12);}
         .info-head h3{margin:0;padding:0;border:none;}
         .info-tools{display:flex;gap:8px;}
         .icon-btn{width:32px;height:32px;border-radius:10px;border:1px solid rgba(255,255,255,.85);
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.46);
-            color:#5b86c0;display:grid;place-items:center;cursor:pointer;
-            box-shadow:var(--g-inner),0 4px 12px rgba(60,110,190,.1);
+            background:rgba(255,255,255,.55);color:#5b86c0;display:grid;place-items:center;cursor:pointer;
+            box-shadow:0 4px 12px rgba(60,110,190,.1),0 0 10px rgba(150,190,255,.18);
             transition:box-shadow .28s ease,border-color .28s ease,background .28s ease,transform .15s ease;}
-        .icon-btn:hover{border-color:rgba(158,188,228,.55);background:rgba(255,255,255,.95);
-            box-shadow:0 4px 12px rgba(145,178,230,.18),inset 0 0 8px rgba(190,210,240,.12);}
+        .icon-btn:hover{border-color:rgba(158,188,228,.7);background:rgba(255,255,255,.75);
+            box-shadow:0 0 12px rgba(145,178,230,.28),inset 0 0 8px rgba(190,210,240,.18);}
         .icon-btn:active{transform:scale(.92);}
 
         /* ===== 管理员密码弹窗 ===== */
         .modal-mask{position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;
-            background:rgba(40,70,130,.28);backdrop-filter:blur(14px) saturate(180%) brightness(1.02);-webkit-backdrop-filter:blur(14px) saturate(180%) brightness(1.02);
+            background:rgba(0,0,0,.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
             opacity:0;pointer-events:none;transition:opacity .32s ease;padding:24px;}
         .modal-mask.show{opacity:1;pointer-events:auto;}
-        .modal-card{position:relative;width:100%;max-width:340px;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.95);
-            border:1px solid transparent;
-            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
-            border-radius:22px;padding:24px 22px 20px;
-            box-shadow:var(--g-inner),0 24px 70px rgba(40,80,150,.32);
-            transform:translateY(18px) scale(.96);transition:transform .38s var(--e-settle);}
-        .modal-card::before{
-            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--g-edge);
-            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            mask-composite:exclude;
-        }
+        .modal-card{width:100%;max-width:340px;background:rgba(255,255,255,.96);border:1px solid rgba(0,0,0,.05);
+            border-radius:22px;padding:24px 22px 20px;box-shadow:0 24px 70px rgba(0,0,0,.15);
+            transform:translateY(18px) scale(.96);transition:transform .38s cubic-bezier(.22,1,.36,1);}
         .modal-mask.show .modal-card{transform:translateY(0) scale(1);}
-        .modal-title{font-size:17px;font-weight:700;color:#1e3a5f;}
-        .modal-sub{font-size:12.5px;color:#6f93c2;margin-top:5px;line-height:1.5;}
+        .modal-title{font-size:17px;font-weight:700;color:#2c3540;}
+        .modal-sub{font-size:12.5px;color:#8a94a6;margin-top:5px;line-height:1.5;}
         .modal-input{width:100%;box-sizing:border-box;margin-top:16px;height:46px;border-radius:13px;border:1.5px solid rgba(120,160,225,.4);
             background:rgba(255,255,255,.85);padding:0 14px;font-size:16px;color:#1e3a5f;letter-spacing:2px;outline:none;
             transition:border-color .25s ease,box-shadow .25s ease;}
@@ -702,8 +499,8 @@
         .modal-btns{display:flex;gap:10px;margin-top:6px;}
         .mbtn{flex:1;height:44px;border-radius:13px;border:none;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .25s,background .25s;}
         .mbtn:active{transform:scale(.96);}
-        .mbtn.ghost{background:rgba(255,255,255,.92);color:#5b86c0;border:1px solid rgba(120,160,225,.35);}
-        .mbtn.primary{background:linear-gradient(135deg,#5b93e6,#4a7fd6);color:#fff;box-shadow:0 8px 20px rgba(80,130,220,.35);}
+        .mbtn.ghost{background:#f2f4f8;color:#4a7fd6;border:1px solid rgba(0,0,0,.06);}
+        .mbtn.primary{background:#f2f4f8;color:#4a7fd6;border:1px solid rgba(74,127,214,.3);}
 
         /* ===== 编辑模式：字段可编辑 ===== */
         .info-card.editing .v{background:rgba(255,255,255,.92);border:1.5px dashed rgba(110,155,240,.65);
@@ -713,119 +510,87 @@
         .info-card.editing .row[data-lock="1"] .v{border-color:transparent;background:transparent;cursor:default;box-shadow:none;}
         .admin-bar{position:fixed;left:50%;bottom:18px;transform:translate(-50%,140%);z-index:9520;
             display:flex;gap:8px;max-width:calc(100vw - 24px);padding:10px;border-radius:18px;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.94);
-            border:1px solid transparent;
-            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
-            box-shadow:var(--g-inner),0 18px 50px rgba(40,80,150,.3);opacity:0;pointer-events:none;
-            transition:transform .42s var(--e-settle),opacity .3s ease;}
+            background:rgba(238,246,255,.9);border:1px solid rgba(255,255,255,.9);
+            backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+            box-shadow:0 18px 50px rgba(40,80,150,.3);opacity:0;pointer-events:none;
+            transition:transform .42s cubic-bezier(.22,1,.36,1),opacity .3s ease;}
         .admin-bar.show{transform:translate(-50%,0);opacity:1;pointer-events:auto;}
-        .admin-bar::before{
-            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--g-edge);
-            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            mask-composite:exclude;
-        }
         .abtn{border:none;white-space:nowrap;height:40px;padding:0 15px;border-radius:11px;font-size:13.5px;font-weight:600;cursor:pointer;
             background:linear-gradient(135deg,#5b93e6,#4a7fd6);color:#fff;box-shadow:0 6px 14px rgba(80,130,220,.3);transition:transform .15s;}
         .abtn:active{transform:scale(.94);}
-        .abtn.ghost{background:rgba(255,255,255,.94);color:#5b86c0;box-shadow:none;border:1px solid rgba(120,160,225,.3);}
+        .abtn.ghost{background:rgba(255,255,255,.8);color:#5b86c0;box-shadow:none;border:1px solid rgba(120,160,225,.3);}
         body.editing{padding-bottom:96px;}
         .admin-bar{flex-wrap:wrap;justify-content:center;}
         .admin-bar{flex-wrap:nowrap;gap:6px;padding:8px;}
         .admin-bar .abtn{height:38px;padding:0 12px;font-size:13px;}
 
-        /* ===== 一键小窗（澎湃 OS 风格） ===== */
-        .mini-backdrop{position:fixed;inset:0;z-index:9040;background:radial-gradient(circle at 50% 30%,rgba(120,160,230,.16),rgba(40,70,130,.26));
-            opacity:0;pointer-events:none;transition:opacity .4s ease;}
-        .mini-backdrop.show{opacity:1;}
-        .full-wrap.mini{position:fixed;z-index:9050;overflow:hidden;border-radius:26px;touch-action:none;
-            box-shadow:0 30px 90px rgba(25,60,120,.42),0 0 0 5px rgba(255,255,255,.55);
-            transition:transform .42s var(--e-expo),border-radius .42s ease;}
-        .full-wrap.mini.dragging{transition:none;}
-        .full-wrap.mini .toolbar,.full-wrap.mini .tip-banner{opacity:0!important;pointer-events:none;}
-        .full-wrap.mini .model-container{border-radius:0;border-width:0;}
-        .mini-drag{position:absolute;inset:0;z-index:6;touch-action:none;cursor:grab;}
-        /* 贴边竖条胶囊（微信视频式）：固定屏幕右缘，可上下拖、点按恢复 */
-        .mini-edge-tab{position:fixed;right:7px;top:50%;z-index:9055;width:26px;height:98px;touch-action:none;cursor:pointer;
-            display:grid;place-items:center;color:#4a7fd6;border-radius:15px;
-            background:
-                var(--g-grain),
-                var(--g-sheen),
-                rgba(255,255,255,.97);
-            backdrop-filter:var(--g-blur);-webkit-backdrop-filter:var(--g-blur);
-            border:1px solid transparent;
-            box-shadow:var(--g-inner),0 8px 24px rgba(50,100,180,.3);
-            transform:translateY(-50%);transition:top .32s var(--e-settle),opacity .3s ease,transform .3s ease;
-            animation:tabIn .5s cubic-bezier(.32,.72,0,1) .1s backwards;}
-        .mini-edge-tab::before{
-            content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-            padding:1px;background:var(--g-edge);
-            -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-            mask-composite:exclude;
-        }
-        @keyframes tabIn{from{opacity:0;transform:translateX(40px) translateY(-50%);}to{opacity:1;transform:translateX(0) translateY(-50%);}}
-        .mini-edge-tab:active{transform:translateY(-50%) scale(.9);}
-        .mini-edge-tab.out{opacity:0;transform:translateX(46px) translateY(-50%);}
         /* 保存模型图片弹窗 */
         .shot-card{width:min(88vw,380px);max-width:380px;}
         .shot-imgwrap{margin:6px 0 14px;border-radius:14px;overflow:hidden;background:#fff;
-            border:1px solid rgba(150,190,255,.3);box-shadow:0 8px 26px rgba(50,100,180,.18);}
-        .shot-imgwrap img{display:block;width:100%;height:auto;background:linear-gradient(160deg,#f2f7ff,#e7f0fb);
-            animation:softIn .5s var(--e-settle) .1s backwards;}
-        .mini-hint{position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:9045;
-            background:
-                var(--g-grain),
-                linear-gradient(180deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.04) 26%,rgba(255,255,255,0) 60%,rgba(255,255,255,.07) 100%),
-                rgba(34,62,108,.62);
-            backdrop-filter:blur(22px) saturate(1.15) brightness(1.04);-webkit-backdrop-filter:blur(22px) saturate(1.15) brightness(1.04);
-            color:#fff;font-size:13px;padding:9px 18px;border-radius:30px;
-            box-shadow:inset 0 1px 1px rgba(255,255,255,.28),inset 0 -1px 1px rgba(255,255,255,.08),0 10px 30px rgba(20,45,90,.35);
-            opacity:0;pointer-events:none;transition:opacity .4s ease;white-space:nowrap;}
-        .mini-hint.show{opacity:1;}
-        body.in-mini .header,body.in-mini .footer{opacity:0;pointer-events:none;}
+            border:1px solid rgba(150,190,255,.3);box-shadow:0 8px 26px rgba(50,100,180,.18),0 0 18px rgba(150,190,255,.2);}
+        .shot-imgwrap img{display:block;width:100%;height:auto;background:#f7f8fa;
+            animation:softIn .55s cubic-bezier(.22,1,.36,1) .12s backwards;}
         /* 功能圆键点按：柔光玻璃光晕从触点漾开 */
         .glow-press{position:relative;overflow:hidden;isolation:isolate;}
         .fs-ctrl.glow-press{position:absolute;}
         .glow-press>svg,.glow-press>span{position:relative;z-index:2;}
         .glow-press .gp-ripple{position:absolute;border-radius:50%;pointer-events:none;z-index:1;
-            background:radial-gradient(circle,rgba(20,30,50,.14) 0%,rgba(20,30,50,.06) 55%,transparent 74%);
-            transform:translate(-50%,-50%) scale(0);animation:gpWave .72s var(--e-settle) forwards;}
-        @keyframes gpWave{0%{opacity:.95;transform:translate(-50%,-50%) scale(0);}55%{opacity:.7;}100%{opacity:0;transform:translate(-50%,-50%) scale(2.1);}}
-        /* 微信浮窗引导 */
-        .fg-mock{margin-top:14px;border-radius:14px;overflow:hidden;border:1px solid rgba(120,160,225,.3);background:#fff;box-shadow:0 8px 22px rgba(60,110,190,.12);}
-        .fg-bar{display:flex;align-items:center;height:46px;background:#ededed;padding:0 12px;}
-        .fg-bar .fg-x{font-size:18px;color:#333;width:34px;}
-        .fg-bar .fg-title{flex:1;text-align:center;font-size:13px;color:#222;font-weight:600;line-height:1.2;}
-        .fg-bar .fg-dots{position:relative;width:34px;text-align:right;font-weight:700;font-size:20px;letter-spacing:1px;color:#222;}
-        .fg-ring{position:absolute;right:-2px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:2px solid #4a7fd6;border-radius:50%;animation:fgPulse 1.5s ease-out infinite;}
-        @keyframes fgPulse{0%{opacity:.9;transform:translateY(-50%) scale(.7);}70%{opacity:0;transform:translateY(-50%) scale(1.25);}100%{opacity:0;transform:translateY(-50%) scale(1.25);}}
-        .fg-steps{padding:14px 14px 12px;display:flex;flex-direction:column;gap:10px;background:#fff;}
-        .fg-step{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;color:#3d4a5e;line-height:1.5;}
-        .fg-step .n{flex:none;width:19px;height:19px;border-radius:50%;background:linear-gradient(135deg,#5b93e6,#4a7fd6);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;margin-top:1px;}
-        .fg-note{margin-top:10px;font-size:11.5px;line-height:1.55;color:#7a93b8;}
-        /* ===== 柔和淡入（iOS 列表/弹窗入场）=====
-           去掉 filter:blur（逐帧重算掉帧=闪一下）与 scale（起跳放大=弹出感），
-           只留透明度+轻位移，配只减速曲线，最稳最顺 */
-        @keyframes softIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
-        .modal-mask.show .modal-title{animation:softIn .46s var(--e-settle) .06s backwards;}
-        .modal-mask.show .modal-sub{animation:softIn .46s var(--e-settle) .11s backwards;}
-        .modal-mask.show .modal-input{animation:softIn .46s var(--e-settle) .16s backwards;}
-        .modal-mask.show .fg-mock{animation:softIn .5s var(--e-settle) .18s backwards;}
-        .modal-mask.show .fg-note{animation:softIn .46s var(--e-settle) .27s backwards;}
-        .modal-mask.show .modal-btns{animation:softIn .46s var(--e-settle) .3s backwards;}
-        .toast{transition:opacity .26s ease,transform .46s var(--e-settle);}
-        .model-list.show .drag-handle{animation:softIn .46s var(--e-settle) .03s backwards;}
-        .model-list.show .ml-title{animation:softIn .46s var(--e-settle) .07s backwards;}
+            background:radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(170,200,245,.55) 42%,rgba(170,200,245,0) 72%);
+            transform:translate(-50%,-50%) scale(0);animation:gpWave .6s cubic-bezier(.22,1,.36,1) forwards;}
+        @keyframes gpWave{0%{opacity:.9;transform:translate(-50%,-50%) scale(0);}100%{opacity:0;transform:translate(-50%,-50%) scale(1);}}
+        /* ===== 柔和散入/飞入（iOS / 澎湃 / ColorOS 手感） ===== */
+        @keyframes softIn{from{opacity:0;transform:translateY(16px) scale(.97);filter:blur(8px);}to{opacity:1;transform:none;filter:blur(0);}}
+        .modal-mask.show .modal-title{animation:softIn .5s cubic-bezier(.22,1,.36,1) .06s backwards;}
+        .modal-mask.show .modal-sub{animation:softIn .5s cubic-bezier(.22,1,.36,1) .11s backwards;}
+        .modal-mask.show .modal-input{animation:softIn .5s cubic-bezier(.22,1,.36,1) .16s backwards;}
+        .modal-mask.show .modal-btns{animation:softIn .5s cubic-bezier(.22,1,.36,1) .3s backwards;}
+        .toast{transition:opacity .32s ease,transform .46s cubic-bezier(.32,.72,0,1);}
+        .model-list.show .drag-handle{animation:softIn .5s cubic-bezier(.22,1,.36,1) .03s backwards;}
+        .model-list.show .ml-title{animation:softIn .5s cubic-bezier(.22,1,.36,1) .07s backwards;}
         .admin-bar.show{animation:barIn .5s cubic-bezier(.32,.72,0,1) both;}
         @keyframes barIn{from{opacity:0;transform:translate(-50%,26px);}to{opacity:1;transform:translate(-50%,0);}}
-        /* 小窗右下角自由缩放手柄 */
-        .mini-resize{position:absolute;right:6px;bottom:6px;width:30px;height:30px;z-index:8;cursor:nwse-resize;touch-action:none;display:grid;place-items:center;color:rgba(74,127,214,.85);border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.75),rgba(220,234,250,.35));box-shadow:0 3px 10px rgba(60,110,190,.22);}
-        .mini-resize::before{content:'';position:absolute;right:8px;bottom:8px;width:11px;height:11px;border-right:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-bottom-right-radius:3px;}
+        /* ===== 全局统一：浅灰底 + 纯白卡片（iOS/小米风格） ===== */
+        html{background:#eef0f4;}
+        body{background:#eef0f4!important;min-height:100vh;}
+        .info-card,.info-grid,.field,.model-list,.model-item,.admin-bar,.tip-banner,.toast,.fs-toolbar,.fs-bottom-bar,.mini-backdrop{
+            backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+        }
+        .info-card{background:#ffffff!important;box-shadow:0 2px 12px rgba(0,0,0,.05)!important;border:none!important;}
+        .field{background:#f7f8fa!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        .model-item{background:#ffffff!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        .btn,.icon-btn,.fs-ctrl,.mbtn,.abtn{
+            background:#ffffff!important;
+            backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+            box-shadow:0 2px 10px rgba(0,0,0,.08),0 1px 3px rgba(0,0,0,.05),inset 0 0 0 1px rgba(0,0,0,.06)!important;
+            border:none!important;
+        }
+        .mbtn.primary{
+            background:#f2f4f8!important;
+            color:#4a7fd6!important;
+            border:1px solid rgba(74,127,214,.3)!important;
+            box-shadow:none!important;
+        }
+        .btn:active,.icon-btn:active,.fs-ctrl:active{transform:scale(.94);}
+        /* 激活态：深蓝透色 */
+        .btn.active,.icon-btn.active,.fs-ctrl.active{
+            background:rgba(74,127,214,.18)!important;
+            color:#2563a8!important;
+            box-shadow:0 2px 10px rgba(74,127,214,.25),inset 0 0 0 1.5px rgba(74,127,214,.45)!important;
+        }
+        body.in-fs{background:#eef0f4!important;}
+        body.in-fs .full-wrap{background:transparent!important;}
+        .model-container{background:#ffffff!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+        /* 构件全屏：信息卡在模型下层，模型构件挡住信息卡 */
+        .full-wrap.model-backdrop .model-container{background:transparent!important;}
+        .full-wrap.model-backdrop .info-card{
+            background:rgba(255,255,255,.75)!important;
+            backdrop-filter:blur(10px) saturate(140%)!important;-webkit-backdrop-filter:blur(10px) saturate(140%)!important;
+            box-shadow:0 4px 20px rgba(50,80,130,.08)!important;
+            border:1px solid rgba(255,255,255,.6)!important;
+            -webkit-mask-image:none!important;mask-image:none!important;
+            z-index:1!important;
+            border-radius:20px!important;
+        }
     </style>
 </head>
 <body>
@@ -849,25 +614,7 @@
     <button class="abtn ghost" id="adminClear">还原</button>
     <button class="abtn ghost" id="adminDone">完成</button>
 </div>
-<div class="mini-backdrop" id="miniBackdrop"></div>
-<div class="mini-hint" id="miniHint">小窗：拖动移动 · 双指或右下角缩放 · 点按恢复</div><div class="modal-mask" id="floatGuide">
-    <div class="modal-card">
-        <div class="modal-title">小窗 · 边聊边看</div>
-        <div class="modal-sub">微信里的网页需要用微信自带的「浮窗」收到屏幕侧边，就能回消息、点浮窗回来：</div>
-        <div class="fg-mock">
-            <div class="fg-bar"><span class="fg-x">✕</span><span class="fg-title">中铁装配 钢结构构件信息</span><span class="fg-dots">•••<i class="fg-ring"></i></span></div>
-            <div class="fg-steps">
-                <div class="fg-step"><span class="n">1</span><span>点页面右上角的「<b>···</b>」</span></div>
-                <div class="fg-step"><span class="n">2</span><span>在弹出的菜单里选择「<b>浮窗</b>」</span></div>
-                <div class="fg-step"><span class="n">3</span><span>页面收到屏幕侧边后即可回微信聊天；点侧边浮窗就回到本页</span></div>
-            </div>
-        </div>
-        <div class="fg-note">注：像肯德基那种可自由拖动的系统小窗是「微信小程序」专属能力，普通网页受微信和手机系统限制无法一键实现；需要的话可以把本系统改造成小程序。</div>
-        <div class="modal-btns" style="margin-top:14px;"><button class="mbtn primary" id="floatGuideOk">我知道了</button></div>
-    </div>
-</div>
-
-    <!-- 保存模型图片预览 -->
+<!-- 保存模型图片预览 -->
     <div class="modal-mask" id="shotMask">
       <div class="modal-card shot-card">
         <div class="modal-title">构件模型图</div>
@@ -886,15 +633,16 @@
 <div class="full-wrap" id="fullWrap">
     <div class="model-container" id="modelContainer">
         <div class="progress"><div class="bar" id="bar"></div></div>
-        <model-viewer id="viewer" alt="构件3D模型" loading="eager" decoder-path="lib/draco/" shadow-intensity="0.3" camera-controls interaction-prompt="auto" field-of-view="30deg" polar-min="-90deg" polar-max="270deg" min-field-of-view="5deg" max-field-of-view="80deg" exposure="1" tone-mapping="neutral"></model-viewer>
+        <model-viewer id="viewer" alt="构件3D模型" loading="eager" shadow-intensity="0.3" camera-controls interaction-prompt="auto" min-camera-orbit="auto 0deg auto" max-camera-orbit="auto 180deg auto" min-field-of-view="5deg" max-field-of-view="80deg" exposure="1" tone-mapping="neutral"></model-viewer>
         <div class="toolbar" id="toolbar">
-            <button class="btn" id="btnRotate" title="自动旋转" style="background:#4a7fd6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 3.8v4h-4"/></svg></button>
-            <button class="btn" id="btnPan" title="移动模式（单指拖移）" style="background:#43a06f"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.2V5.9a1.35 1.35 0 0 1 2.7 0v4.6M11.7 10.5V4.7a1.35 1.35 0 0 1 2.7 0v5.8M14.4 10.9V6.6a1.35 1.35 0 0 1 2.7 0v7.1c0 3.6-2.4 6.3-5.9 6.3-2.6 0-4.3-1.2-5.5-3.4l-2-3.6a1.32 1.32 0 0 1 2.1-1.5l1.3 1.7"/></svg></button>
-            <button class="btn" id="btnReset" title="重置视角" style="background:#ef8f3c"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="2.5" fill="#fff" stroke="none"/><path d="M12 2.8v2.8M12 18.4v2.8M2.8 12h2.8M18.4 12h2.8"/></svg></button>
-            <button class="btn" id="btnFull" title="整页全屏" style="background:#5b6fd6"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button>
-            <button class="btn" id="btnModelFull" title="模型占满全屏" style="background:#8a5fd6"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2.6"/><rect x="8" y="8" width="8" height="8" rx="1.4" fill="#fff" stroke="none"/></svg></button>
-            <button class="btn" id="btnSwitch" title="切换构件" style="background:#1fa7b8"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13M14 4l3 3-3 3"/><path d="M20 17H7M10 14l-3 3 3 3"/></svg></button>
-            <button class="btn" id="btnMini" title="保存模型图片" style="background:#e0605e"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.4-2.2h7.2L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.4" r="3.3"/></svg></button>
+            <button class="btn" id="btnRotate" title="自动旋转">🔄</button>
+            <button class="btn" id="btnPan" title="移动模式（单指拖移）">✋</button>
+            <button class="btn" id="btnFree" title="360°自由旋转（上下可翻转）"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.6"/><path d="M12.9 2.3 L10.3 2.3 L11.2 4.2 Z" fill="currentColor" stroke="none"/><path d="M21.7 11.1 L21.7 13.7 L19.8 12.6 Z" fill="currentColor" stroke="none"/><path d="M11.1 21.7 L13.7 21.7 L12.8 19.8 Z" fill="currentColor" stroke="none"/><path d="M2.3 12.9 L2.3 10.3 L4.2 11.2 Z" fill="currentColor" stroke="none"/><text x="12" y="15.9" text-anchor="middle" font-family="system-ui,Arial" font-weight="800" font-size="8.8" fill="currentColor" stroke="none" letter-spacing="-.5">360</text></svg></button>
+            <button class="btn" id="btnReset" title="重置视角">🎯</button>
+            <button class="btn" id="btnFull" title="整页全屏">⛶</button>
+            <button class="btn" id="btnModelFull" title="模型占满全屏">🖥️</button>
+            <button class="btn" id="btnSwitch" title="切换构件">🔀</button>
+            <button class="btn" id="btnMini" title="保存模型图片"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.4-2.2h7.2L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.4" r="3.3"/></svg></button>
         </div>
         <div class="tip-banner" id="tipBanner">💡拖动旋转360度查看模型</div>
         <div class="loading" id="loading">
@@ -945,16 +693,17 @@
         <div class="ml-fade ml-fade-bottom"></div>
     </div>
 </div>
-<p class="footer">中铁装配 · 钢结构构件一物一码系统<br>制作人：赵文杰</p>
+<p class="footer">中铁装配 · 钢结构构件一物一码系统<br>制作人：赵文杰&nbsp;&nbsp;·&nbsp;&nbsp;负责人：常建佳</p>
 <script src="data.js"></script>
 <script>
 const $ = s => document.querySelector(s);
-let id = new URLSearchParams(location.search).get('id');
+const id = new URLSearchParams(location.search).get('id');
 const viewer = $('#viewer'), loading = $('#loading'), bar = $('#bar'), percent = $('#percent'),
 error = $('#error'), fullWrap = $('#fullWrap'), btnFull = $('#btnFull'), btnModelFull = $('#btnModelFull'),
 btnRotate = $('#btnRotate'), btnReset = $('#btnReset'), infoCard = $('#infoCard'), tipBanner = $('#tipBanner'),
 glow = $('#glow'), btnSwitch = $('#btnSwitch'), toast = $('#toast'), modelContainer = $('#modelContainer'),
 btnPan = $('#btnPan');
+const btnFree = $('#btnFree');
 let rotate = false, tipTimer = null, retryCount = 0;
 const fields = ['partId','workNo','projectName','section','partType','material','spec','quantity'];
 /* 管理员在本机保存的修改：渲染前合并到数据（仅保存在本设备浏览器，导出 data.js 才能同步到线上） */
@@ -966,110 +715,18 @@ function loadOverrides(){
     }catch(e){}
 }
 loadOverrides();
-/* ===== 模型加载架构（本轮优化）=====
-   1) 切换构件 = 热切换：只换 viewer.src 与信息字段，不再整页 location.href 重载
-      —— 省掉重新下载解析 model-viewer 库、重建 WebGL 上下文、重放页面入场动画的全部开销；
-   2) 首模型加载完成后，按"省流感知"策略预取其余 GLB 为 Blob 缓存（见 preloadRest）：
-      WiFi 全量预载、蜂窝只预取下一个、用户开流量节省则完全不预载；
-      已缓存的构件切换是"秒开"：src 直接指向内存 blob，零网络零进度条；
-   3) 事件监听只注册一次，切换/重试/进度复用同一套状态机，杜绝重复绑定。 */
-const glbCache = {};                                   /* glbUrl -> blob: URL（已预载） */
-const glbPending = {};                                 /* glbUrl -> 1（请求在途，防重复发起） */
-const srcOf = d => glbCache[d.glbUrl] || d.glbUrl;     /* 有缓存用缓存，没有走原地址 */
-function fillInfo(d){
-    fields.forEach(f => {const el = $(`#${f}`); if(el){ if(d[f]) el.innerText = d[f]; else el.innerText = '—'; }});
-}
-function showLoadingUI(){
-    loading.style.display = 'flex'; loading.style.opacity = '1';
-    bar.style.width = '0%'; percent.innerText = '0%';
-    $('#loadingSub').innerText = '正在准备模型…';
-    document.querySelector('.progress').classList.remove('done');
-    error.style.display = 'none';
-}
-/* ===== 省流感知的预载策略 =====
-   模型每个 0.7MB，全量预载约 3MB，走流量时不该默默吃掉。按网络实际情况分三档：
-   · 用户开了"流量节省"(Save-Data) → 完全不预载，切哪个下哪个；
-   · 蜂窝网络 → 只预取"下一个"构件（最可能被点的那个），其余按需加载；
-   · WiFi / 拿不到网络信息 → 全量预载，切换秒开。
-   注意 fetch 走浏览器缓存，同一构件重复预取不会二次计费。 */
-function netProfile(){
-    try{
-        const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-        if(!c) return 'wifi';                    /* 不支持该 API（iOS Safari 等）按宽松档处理 */
-        if(c.saveData) return 'off';             /* 用户明确要求省流，最高优先级 */
-        const t = c.type, et = c.effectiveType || '';
-        if(t === 'cellular' || /^cell/.test(t)) return 'cellular';
-        if(/^([23]g)$/.test(et)) return 'cellular';   /* 弱网按蜂窝处理，避免抢带宽拖慢当前加载 */
-        return 'wifi';
-    }catch(e){ return 'wifi'; }
-}
-function preloadOne(url){
-    if(!url || glbCache[url] || glbPending[url]) return;
-    glbPending[url] = 1;
-    fetch(url).then(r => r.ok ? r.blob() : null)
-        .then(b => { if(b) glbCache[url] = URL.createObjectURL(b); delete glbPending[url]; })
-        .catch(()=>{ delete glbPending[url]; });
-}
-/* 按当前构件在数据表中的顺序，取紧随其后的那一个（列表里就是下一个可见项） */
-function nextPartUrl(){
-    if(!window.partData) return '';
-    const keys = Object.keys(partData);
-    const i = keys.findIndex(k => String(k) === String(id));
-    const order = i < 0 ? keys : keys.slice(i + 1).concat(keys.slice(0, Math.max(0, i)));
-    for(const k of order){
-        const u = partData[k] && partData[k].glbUrl;
-        if(u && !glbCache[u]) return u;
-    }
-    return '';
-}
-function preloadRest(){
-    if(!window.partData) return;
-    const mode = netProfile();
-    if(mode === 'off') return;                                   /* 省流模式：一个都不预载 */
-    /* 蜂窝：只预取下一个；WiFi：也只预取下一个，取完再顺延队列 ——
-       绝不并发全量下载：日志实测 4 个 GLB 并发曾和当前模型抢带宽，越预载越慢 */
-    const urls = [];
-    const start = Object.keys(partData).findIndex(k => String(k) === String(id));
-    const keys = start < 0 ? Object.keys(partData)
-        : Object.keys(partData).slice(start + 1).concat(Object.keys(partData).slice(0, Math.max(0, start)));
-    keys.forEach(k => { const u = partData[k] && partData[k].glbUrl; if(u && !glbCache[u]) urls.push(u); });
-    const limit = mode === 'cellular' ? 1 : urls.length;
-    let i = 0;
-    const next = () => {
-        while(i < urls.length && glbCache[urls[i]]) i++;
-        if(i >= urls.length || i >= limit) return;
-        const u = urls[i++];
-        fetch(u).then(r => r.ok ? r.blob() : null)
-            .then(b => { if(b) glbCache[u] = URL.createObjectURL(b); next(); })
-            .catch(()=>{ next(); });
-    };
-    next();
-}
-const idle = (fn, ms) => ('requestIdleCallback' in window) ? requestIdleCallback(fn, {timeout: ms||4000}) : setTimeout(fn, ms||1500);
-/* 热切换入口：更新 id → 改地址栏（可分享/返回） → 刷新信息 → 换模型 */
-function switchPart(pid){
-    if(!window.partData || !partData[pid] || String(pid) === String(id)) { if(String(pid)===String(id)) closeModelList(); return; }
-    id = pid; retryCount = 0;
-    try{ history.pushState({id:pid}, '', location.pathname + '?id=' + pid); }catch(e){}
-    const d = partData[pid];
-    fillInfo(d);
-    showLoadingUI();
-    try{ viewer.autoRotate = rotate; }catch(e){}
-    viewer.src = srcOf(d);
-    /* 切完再按省流策略续预取：WiFi 下已缓存的会被自动跳过（零额外流量），
-       蜂窝下只预取新的"下一个"，流量节省模式则什么都不做 */
-    idle(preloadRest, 2200);
-}
 if(id && window.partData && partData[id]){
-    fillInfo(partData[id]);
-    viewer.src = partData[id].glbUrl;
+    const d = partData[id];
+    fields.forEach(f => {const el = $(`#${f}`); if(el && d[f]) el.innerText = d[f];});
+    viewer.src = d.glbUrl;
     viewer.autoRotateSpeed = 5;
     /* 进页面即自旋；一旦用户手势操控自动暂停，🔄 按钮可随时开关 */
     viewer.autoRotate = true; rotate = true;
     if(btnRotate) btnRotate.classList.add('active');
     viewer.addEventListener('camera-change', e => {
-        if(e.detail && e.detail.source === 'user-interaction'){
-            if(rotate){ rotate = false; viewer.autoRotate = false; btnRotate.classList.remove('active'); }
+        if(e.detail && e.detail.source === 'user-interaction' && rotate){
+            rotate = false; viewer.autoRotate = false;
+            btnRotate.classList.remove('active');
         }
     });
     viewer.addEventListener('progress', e => {
@@ -1093,10 +750,9 @@ if(id && window.partData && partData[id]){
             tipBanner.classList.add('show');
             tipTimer = setTimeout(()=>tipBanner.classList.remove('show'), 5000);
         }, 300);
-        idle(preloadRest, 2500);   /* 首模型就绪、页面稳定后再预载其余，不与首次加载抢带宽 */
     });
     viewer.addEventListener('error', () => {
-        if(retryCount < 1){retryCount++; setTimeout(()=>{viewer.src = srcOf(partData[id]);}, 1000);}
+        if(retryCount < 1){retryCount++; setTimeout(()=>{viewer.src = partData[id].glbUrl;}, 1000);}
         else {loading.style.display='none'; error.style.display='flex';}
     });
 }else{
@@ -1116,8 +772,8 @@ document.addEventListener('pointerdown', e => { glow.classList.add('press'); mov
 document.addEventListener('pointerup', e => { glow.classList.remove('press'); if(e.pointerType === 'touch') glow.style.opacity = '0'; }, {passive:true});
 document.addEventListener('pointercancel', () => glow.classList.remove('press'), {passive:true});
 document.addEventListener('mouseleave', () => { glow.style.opacity = '0'; glow.classList.remove('press'); });
-btnRotate.onclick = () => { rotate = !rotate; viewer.autoRotate = rotate; btnRotate.classList.toggle('active', rotate); }
-btnReset.onclick = () => { camPinned=false; viewer.fieldOfView="30deg"; viewer.cameraOrbit = "0deg 75deg auto"; viewer.cameraTarget = "0m 0m 0m"; viewer.jumpCameraToGoal(); setTimeout(ensureAbsRadius,320); }
+btnRotate.onclick = () => { if(!rotate && freeMode){ try{ setFreeMode(false); }catch(e){} } rotate = !rotate; viewer.autoRotate = rotate; btnRotate.classList.toggle('active', rotate); }
+btnReset.onclick = () => { camPinned=false; viewer.cameraOrbit = "0deg 75deg auto"; viewer.cameraTarget = "0m 0m 0m"; viewer.jumpCameraToGoal(); try{ resetFree(); }catch(e){} setTimeout(ensureAbsRadius,320); }
 let clickCount = 0, clickTimer = null;
 viewer.addEventListener('click', (e) => {
     clickCount++; clearTimeout(clickTimer);
@@ -1156,7 +812,7 @@ function renderModelList(kw){
             +'<div class="mid">构件编号：'+(d.partId||pid)+'</div>'
             +'<div class="mname">'+(d.projectName||'')+' · '+(d.partType||'')+'</div>'
             +(d.workNo?'<div class="mno">加工号 '+d.workNo+'</div>':'');
-        item.onclick=()=>{ closeModelList(); setTimeout(()=>{ switchPart(pid); },260); };
+        item.onclick=()=>{ closeModelList(); setTimeout(()=>{ location.href=location.pathname+'?id='+pid; },260); };
         item.addEventListener('pointerdown',()=>{ item.classList.remove('fadeout'); item.classList.add('pressing'); });
         ['pointerup','pointercancel','pointerleave'].forEach(ev=>item.addEventListener(ev,()=>{ if(item.classList.contains('pressing')){ item.classList.remove('pressing'); item.classList.add('fadeout'); setTimeout(()=>item.classList.remove('fadeout'),500); } }));
         bindGlowPress(item);
@@ -1197,15 +853,12 @@ tipBanner.onclick = () => { tipBanner.classList.remove('show'); clearTimeout(tip
 /* ============ FLIP 平滑全屏（纯CSS，不移动DOM，修复层叠上下文） ============ */
 /* 动效基调：进入用超慢出（expo-out，只减速永不回弹），离场用加速消失，
    对齐 OPPO/vivo 系统面板的手感；杜绝 spring 过冲带来的“弹一下”卡通感 */
-const EASE = 'cubic-bezier(.22,.61,.36,1)';        /* 柔和减速：进入淡入，对标 iOS */
-const EASE_IN = 'cubic-bezier(.4,.04,.6,1)';    /* 柔和加速：退出淡出 */
-const EASE_SET = 'cubic-bezier(.32,.72,0,1)';    /* iOS 面板主曲线：长尾减速、零回弹 */
-/* 进/退场与互切统一时长 + 共用同一条交叉淡化曲线：
-   进来的层与出去的层透明度互补、速度均匀，不会一段快一段慢，也就不会留下残影 */
-const XF_MS = 420, XF_SW_MS = 380;
-const XFADE = 'cubic-bezier(.33,0,.22,1)';
+const EASE = 'cubic-bezier(.32,.72,0,1)';        /* iOS 式进场减速：柔和到位、带极轻 settling，不过冲 */
+const EASE_IN = 'cubic-bezier(.4,0,.6,1)';    /* 退场加速：旧画面先保持、末段才消散，交叉淡化全程不露空、不白闪 */
 const FS_IN_MS = 440;
-const FLY_MS = 380;
+const XF_MS = 420, XF_SW_MS = 380;             /* 进/退场与互切交叉淡化统一时长：进层与出层完全同步，速度均匀无残影 */
+const XFADE = 'cubic-bezier(.33,0,.22,1)';     /* 柔和、中段速度均匀的交叉淡化曲线（进/出共用，保证两层透明度互补） */
+const FLY_MS = 420;
 const EASE_FLY = 'cubic-bezier(.4,0,.72,.45)';
 const ORI_MS = 540, ORI_EASE = 'cubic-bezier(.32,.72,0,1)';   /* 横竖屏旋转：模型容器/信息卡/按键共用同一时长与缓动，保持同步 */
 let fsState = null;
@@ -1223,54 +876,20 @@ const ICON_RESET = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" 
 const ICON_SWITCH = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13M14 4l3 3-3 3"/><path d="M20 17H7M10 14l-3 3 3 3"/></svg>';
 
 function safeResize(){ try{ if(typeof viewer.resize === "function") viewer.resize(); else window.dispatchEvent(new Event("fs-nudge")); }catch(e){} }
-/* ===== 过渡期冻结 WebGL 渲染 =====
-   自旋时 model-viewer 每帧重画整个 3D 画布，还在下层持续改变所有玻璃面板的
-   backdrop 采样源（模糊被迫跟着逐帧重算）—— 这正是快照淡出那 400ms 里
-   与 CSS 动画抢 GPU 的隐形对手。iOS 的 zoom 转场同样会冻结源内容再 morph。
-   做法：过渡开始暂停自旋（快照与真实画布此刻角度一致，冻结无感），
-   过渡结束恢复。用户若本就关了自旋则不做任何事。 */
-let spinHold = false;
-function holdSpin(){
-    if(rotate && !spinHold){ spinHold = true; try{ viewer.autoRotate = false; }catch(e){} }
-}
-function releaseSpin(){
-    /* 过渡期间用户可能已手动关掉自旋（点按模型即停）：此时绝不能替他打开，
-       只认 rotate 标志 —— 它由按钮/手势统一维护，是用户意图的唯一事实来源 */
-    if(spinHold){ spinHold = false; try{ if(rotate) viewer.autoRotate = true; }catch(e){} }
-}
 /* 全屏图标直接复用主页按钮字形，改主页即同步，无需重新认图标 */
-function homeIcon(id){ const h=document.getElementById(id); if(!h) return ''; const e=h.textContent.trim(); return ICON_MAP[e] || (h.querySelector('svg') ? h.innerHTML : e); }
-/* 设置页图标语言：彩色圆角块 + 白色线条符号 */
-const ICON_BG = {'🔄':'#4a7fd6','✋':'#43a06f','🎯':'#ef8f3c','⛶':'#5b6fd6','🖥️':'#8a5fd6','🔀':'#1fa7b8','📷':'#e0605e'};
-const ICON_MAP = {
-  '🔄': '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 3.8v4h-4"/></svg>',
-  '✋': '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.2V5.9a1.35 1.35 0 0 1 2.7 0v4.6M11.7 10.5V4.7a1.35 1.35 0 0 1 2.7 0v5.8M14.4 10.9V6.6a1.35 1.35 0 0 1 2.7 0v7.1c0 3.6-2.4 6.3-5.9 6.3-2.6 0-4.3-1.2-5.5-3.4l-2-3.6a1.32 1.32 0 0 1 2.1-1.5l1.3 1.7"/></svg>',
-  '🎯': '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="2.5" fill="#fff" stroke="none"/><path d="M12 2.8v2.8M12 18.4v2.8M2.8 12h2.8M18.4 12h2.8"/></svg>',
-  '⛶': '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>',
-  '🖥️': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2.6"/><rect x="8" y="8" width="8" height="8" rx="1.4" fill="#fff" stroke="none"/></svg>',
-  '🔀': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13M14 4l3 3-3 3"/><path d="M20 17H7M10 14l-3 3 3 3"/></svg>'
-};
+function homeIcon(id){ const h=document.getElementById(id); return h ? h.textContent.trim() : ''; }
+function homeHTML(id){ const h=document.getElementById(id); return h ? h.innerHTML.trim() : ''; }
 function enterFullscreen(type, isSwitch, reuse){
     if(fsState){
         /* 已经在全屏里：可点即响应，先收场再展开另一种全屏 */
     }
     try{ resetGestureState(false); }catch(e){}
-    /* 全新进入前先清掉上一次异常残留的快照层，避免旧白屏快照永久盖在页面上 */
+    /* 全新进入（非互切/复用）前，清掉上一次异常可能残留的快照层，杜绝白屏快照永久覆盖 */
     if(!isSwitch && !reuse){ document.querySelectorAll('.fs-ghost').forEach(n=>{ try{n.remove();}catch(e){} }); }
     const el = type === 'model' ? modelContainer : fullWrap;
     const rect = el.getBoundingClientRect();
     const srcRect = type === 'page' ? modelContainer.getBoundingClientRect() : rect;
     const vw = window.innerWidth, vh = window.innerHeight;
-    /* 先暂停自旋再拍快照：两者角度一致，快照盖住画布后画面完全静止，
-       过渡期间 GPU 只需合成 CSS 动画，不必一边渲染 3D 一边重算毛玻璃 */
-    holdSpin();
-    /* 先冻结当前画面为静态快照（3D 换成图片），后面所有运动都发生在快照上，真实内容零重绘 */
-    const homeGhost = (!isSwitch && !reuse) ? captureGhost(fullWrap) : null;
-    /* 快照一插好就立刻启动淡出，绝不等后面的 DOM 重建（重建+解码占主线程时动画照跑）。
-       进入用纯交叉淡化：页面快照柔和消散、底下的全屏画面显现 —— 刻意不做"缩向卡片"，
-       因为快照内容是整页（标题+卡片+信息），缩到卡片尺寸会整体乱飘，正是之前的闪影 bug；
-       收缩动画只在退出构件全屏时使用（那时快照内容就是全屏模型，缩回卡片才是正确隐喻） */
-    if(homeGhost) fadeGhostOut(homeGhost, {dur:XF_MS});
     const saved = {
         position: el.style.position, left: el.style.left, top: el.style.top,
         width: el.style.width, height: el.style.height, zIndex: el.style.zIndex,
@@ -1279,11 +898,15 @@ function enterFullscreen(type, isSwitch, reuse){
         willChange: el.style.willChange, wrapZ: fullWrap.style.zIndex
     };
 
+    const homeGhost = (!isSwitch && !reuse) ? captureGhost(fullWrap) : null;
+    /* 主页快照立即开始纯 CSS 柔化淡出（不依赖收尾 rAF），与进场同档时长，避免被模型解码阻塞而卡住残影 */
+    if(homeGhost) fadeGhostOut(homeGhost, {dur:XF_MS});
     fullWrap.style.zIndex = '9001';
 
     let bg, ctrl;
     if(reuse){ bg = reuse.bg; ctrl = reuse.ctrl; ctrl.innerHTML = ""; }
     else {
+        document.querySelectorAll('.fs-bg,.fs-ctrl-layer').forEach(n=>{ try{n.remove();}catch(e){} });
         bg = document.createElement("div");
         bg.className = "fs-bg"; document.body.appendChild(bg);
         ctrl = document.createElement("div");
@@ -1293,8 +916,6 @@ function enterFullscreen(type, isSwitch, reuse){
     function makeBtn(cls, html, onclick){
         const b = document.createElement('div');
         b.className = 'fs-ctrl ' + cls;
-        const TINT = {'fs-pagebtn':'#5b6fd6','fs-modelbtn':'#8a5fd6','fs-rotate':'#4a7fd6','fs-panbtn':'#43a06f','fs-eye':'#ef8f3c','fs-exit':'#5b6472','fs-tool-auto':'#4a7fd6','fs-tool-pan':'#43a06f','fs-tool-reset':'#ef8f3c','fs-tool-switch':'#1fa7b8','fs-freebtn':'#8a5fd6'};
-        for(const k in TINT){ if((' '+cls+' ').indexOf(' '+k+' ') >= 0){ b.style.background = TINT[k]; b.style.color = '#fff'; break; } }
         b.innerHTML = html; b.onclick = onclick;
         if(typeof bindGlowPress==='function') bindGlowPress(b);
         ctrl.appendChild(b); return b;
@@ -1309,6 +930,8 @@ function enterFullscreen(type, isSwitch, reuse){
         makeBtn('fs-pagebtn', homeIcon('btnFull'), () => switchFullscreen('page'));
         const panBtn = makeBtn('fs-panbtn', homeIcon('btnPan'), () => setPanMode(!panMode));
         panBtn.classList.toggle('active', panMode);
+        const freeBtnM = makeBtn('fs-freebtn', homeHTML('btnFree'), () => setFreeMode(!freeMode));
+        freeBtnM.classList.toggle('active', freeMode);
         const mEye = makeBtn('fs-eye', ICON_EYE+'<i class="eye-badge"></i>', () => {
             const c = fullWrap.classList.toggle('info-collapsed');
             mEye.classList.toggle('active', c);
@@ -1322,7 +945,12 @@ function enterFullscreen(type, isSwitch, reuse){
         makeBtn('fs-modelbtn', homeIcon('btnModelFull'), () => switchFullscreen('model'));
         const eye=$('#btnEyeInline');
         const floatEye=makeBtn('fs-eye', ICON_EYE+'<i class="eye-badge"></i>', () => toggleInfoCollapse());
+        /* 360 自由旋转键放到右上角眼睛图标旁（与构件全屏一致），不放进右侧 dock */
+        const freeBtnP=makeBtn('fs-freebtn', homeHTML('btnFree'), ()=>setFreeMode(!freeMode));
+        freeBtnP.classList.toggle('active', freeMode);
+        let eyeRun=0;
         function toggleInfoCollapse(){
+            const run=++eyeRun;
             const collapsed=fullWrap.classList.toggle('info-collapsed');
             eye.classList.toggle('active',collapsed);
             eye.innerHTML=collapsed?ICON_EYE_OFF:ICON_EYE;
@@ -1330,21 +958,39 @@ function enterFullscreen(type, isSwitch, reuse){
             floatEye.classList.toggle('active',collapsed);
             floatEye.innerHTML=(collapsed?ICON_EYE_OFF:ICON_EYE)+'<i class="eye-badge"></i>';
             ctrl.classList.toggle('fs-info-off', collapsed);
-            setTimeout(safeResize,500);
+            /* 无死区折叠：起止 max-height 取卡片真实高度，信息卡收合与模型框 flex 放大从第一帧起同步。
+               run 令牌：快速连点时旧动画的 rAF/定时器全部作废；硬兜底：低端机掉帧也保证到达终态、不残留标题。 */
+            const card=infoCard;
+            const afterFrame=(fn)=>{ let done=false; const go=()=>{ if(done)return; done=true; fn(); }; requestAnimationFrame(()=>requestAnimationFrame(go)); setTimeout(go,70); };
+            if(collapsed){
+                card.style.transition='none';
+                card.style.maxHeight=card.scrollHeight+'px';
+                afterFrame(()=>{ if(run!==eyeRun) return; card.style.transition=''; card.style.maxHeight='0px'; });
+                setTimeout(()=>{ if(run===eyeRun && fullWrap.classList.contains('info-collapsed')){ card.style.transition='none'; card.style.maxHeight='0px'; } },280);
+            }else{
+                /* 高度为 0 时网格 1fr 行会被压扁、scrollHeight 偏小；先无约束量到真实高度再回到 0，同帧完成不闪烁 */
+                card.style.transition='none';
+                card.style.maxHeight='none';
+                const nat=card.scrollHeight;
+                card.style.maxHeight='0px';
+                void card.offsetHeight;
+                card.style.transition='';
+                afterFrame(()=>{ if(run!==eyeRun) return; card.style.maxHeight=nat+'px'; });
+                setTimeout(()=>{ if(run===eyeRun && !fullWrap.classList.contains('info-collapsed')) card.style.maxHeight=''; },300);
+            }
+            setTimeout(()=>{ if(run===eyeRun) safeResize(); },260);
         }
         eye.onclick=toggleInfoCollapse;
         /* 右侧功能 dock：自动旋转 / 移动 / 定位复位 / 切换构件(传送) */
         const dock=document.createElement('div'); dock.className='fs-dock'; ctrl.appendChild(dock);
         function dockBtn(cls,html,fn){
             const b=document.createElement('div');
-            b.className='fs-ctrl fs-dock-btn '+cls;
-            const DT={'fs-tool-auto':'#4a7fd6','fs-tool-pan':'#43a06f','fs-tool-reset':'#ef8f3c','fs-tool-switch':'#1fa7b8'};
-            for(const k in DT){ if((' '+cls+' ').indexOf(' '+k+' ') >= 0){ b.style.background=DT[k]; b.style.color='#fff'; break; } }
-            b.innerHTML=html; b.onclick=fn;
+            b.className='fs-ctrl fs-dock-btn '+cls; b.innerHTML=html; b.onclick=fn;
             if(typeof bindGlowPress==='function') bindGlowPress(b);
             dock.appendChild(b); return b;
         }
         const autoB=dockBtn('fs-tool-auto fs-autobtn', homeIcon('btnRotate'), ()=>{
+            if(!rotate && freeMode){ try{ setFreeMode(false); }catch(e){} }
             rotate=!rotate; viewer.autoRotate=rotate;
             try{ btnRotate.classList.toggle('active',rotate); }catch(e){}
             document.querySelectorAll('.fs-autobtn').forEach(x=>x.classList.toggle('active',rotate));
@@ -1363,59 +1009,62 @@ function enterFullscreen(type, isSwitch, reuse){
     fullWrap.classList.remove('ls-card');
     fullWrap.classList.remove('fs-exiting');
 
-    /* 最终布局一次性到位：真实层从第 1 帧就是终态、全程静止 ——
-       所有动画只发生在最上层的"静态克隆"上（纯 GPU 的 scale+opacity），
-       真实页面零重绘、落位点与克隆同源，结构上杜绝卡顿/闪烁/跳变 */
+    /* 最终布局一次性到位：fixed 铺满 */
     el.style.position = "fixed";
     el.style.left = "0px"; el.style.top = "0px";
     el.style.width = "100vw"; el.style.height = "100vh";
     el.style.zIndex = "9002";
-    el.style.opacity = "1";
-    el.style.transform = "none";
-    el.style.clipPath = "";
-    el.style.willChange = "auto";
+    el.style.transformOrigin = "center center";
+    el.style.willChange = "opacity, transform";
     if(type === "model") el.style.borderRadius = "26px";
 
-    /* 原位占位块：el 脱流期间顶住主页布局，退出落位时主页完好无塌陷 */
-    const ph = document.createElement('div');
-    ph.style.cssText = 'height:' + Math.round(rect.height) + 'px;';
-    try{ el.parentNode.insertBefore(ph, el); }catch(e){}
+    /* 进入：普通=纯透明度柔和淡入；互切=新层从左下向右上轻移淡入；双 rAF 保证首帧 */
+    const fromTransform = isSwitch ? "translateY(5px)" : "translateY(6px)";   /* 纯淡入+极轻微上浮，不缩放 */
+    el.style.transition = "none";
+    el.style.opacity = isSwitch ? ".22" : "0";
+    el.style.transform = fromTransform;
+    if(!reuse){ bg.style.transition = "none"; bg.style.opacity = "0"; }
+    else { bg.style.transition = "none"; bg.style.opacity = "1"; }
 
-    bg.style.transition = "none";
-    bg.style.opacity = "1";   /* 遮罩直接到位：此刻快照还盖在最上面，任何变化都看不见 */
-
-    fsState = { el, type, saved, rect, srcRect, bg, ctrl, ph, isLandscape:false, wantLandscape:false, cssRotated:false };
+    fsState = { el, type, saved, rect, srcRect, bg, ctrl, isLandscape:false, wantLandscape:false, cssRotated:false };
     if(!isSwitch){ try{ history.pushState({fs:type}, "", "#" + (type==="model"?"model-full":"page-full")); fsPushed = true; }catch(e){} }
     void el.offsetHeight;
-    /* 快照淡出已在捕获处立即启动，这里不再重复触发；只把 WebGL 画布重建排到动画结束之后，
-       避免动画进行中重建画布抢主线程 */
-    setTimeout(()=>{ try{ safeResize(); }catch(e){} releaseSpin(); }, XF_MS + 140);
-    setTimeout(()=>{ ctrl.querySelectorAll(".fs-ctrl").forEach(b=>b.classList.add("show")); }, 200);
+    /* 收尾幂等：双 rAF 走正常动画，另加硬兜底定时器。进入瞬间 model-viewer 缩放/解码可能吞掉个别帧，
+       若只靠 rAF 会让模型容器永久停在 opacity:0、快照层不消失（白屏卡死）；硬兜底保证必定收尾。 */
+    let __enterDone=false;
+    function finishEnter(){
+        if(__enterDone) return; __enterDone=true;
+        const xd = isSwitch ? XF_SW_MS : XF_MS;
+        /* 进层与出层用同一时长、同一曲线、同一帧启动，透明度互补，速度均匀；出层里的模型先柔化消散，杜绝双模型残影 */
+        if(el.style.transform && el.style.transform.indexOf('rotate') >= 0){
+            el.style.opacity = "1";
+            if(!reuse){ bg.style.transition = "opacity " + xd + "ms " + XFADE; bg.style.opacity = "1"; }
+            return;
+        }
+        el.style.transition = "opacity " + xd + "ms " + XFADE + ", transform " + xd + "ms " + XFADE;
+        el.style.transform = "translateY(0)";
+        el.style.opacity = "1";
+        if(!reuse){ bg.style.transition = "opacity " + xd + "ms " + XFADE; bg.style.opacity = "1"; }
+        setTimeout(safeResize, 110);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(finishEnter));
+    setTimeout(finishEnter, 150);
+    setTimeout(()=>{ ctrl.querySelectorAll(".fs-ctrl").forEach(b=>b.classList.add("show")); }, 230);
 }
 function requestExitFullscreen(){
     if(!fsState || fsState.exiting) return;
     if(fsPushed){ try{ history.back(); }catch(e){ exitFullscreen(); } }
     else { exitFullscreen(); }
 }
-/* 手机物理/手势返回键：优先退出全屏；若只是构件地址变化，则热切回对应构件 */
+/* 手机物理/手势返回键 */
 window.addEventListener('popstate', () => {
-    if(fsState){ fsPushed = false; exitFullscreen(); return; }
-    try{
-        const nid = new URLSearchParams(location.search).get('id');
-        if(nid && window.partData && partData[nid] && String(nid) !== String(id)) switchPart(nid);
-    }catch(e){}
+    if(fsState){ fsPushed = false; exitFullscreen(); }
 });
-/* 克隆当前画面为静态快照（3D 换成图片，绝不新建第二个 WebGL 上下文）。
-   快照盖在最上层做所有动画，真实层在快照底下安静就位 —— 肉眼看不到任何跳变 */
+/* 克隆当前画面为静态快照（模型用 toDataURL 截图替换，绝不新建第二个 WebGL 上下文），
+   让真实结构可立即复位/重建，快照在最上层交叉淡出，从根上消除单元素搬移造成的白闪/跳变 */
 function captureGhost(src){
     try{
-        /* 修正：本地 3.5.0 库的 toDataURL 签名是 (mimeType, quality) 两参数，
-           之前传三个参数会抛异常 → 回退到无参调用 = 全尺寸 PNG 编码（手机上 300~600ms），
-           点下按钮必卡一下 —— 这是卡顿感的主因之一。JPEG 同画质编码快 5 倍以上 */
-        let shot='';
-        try{ shot = viewer.toDataURL('image/jpeg', .82) || ''; }catch(e){
-            try{ shot = viewer.toDataURL('image/webp', .82) || ''; }catch(_){}
-        }
+        let shot=''; try{ shot = viewer.toDataURL('image/webp',0.55) || ''; }catch(e){}
         const g = src.cloneNode(true);
         g.removeAttribute('id'); g.classList.add('fs-ghost');
         g.querySelectorAll('model-viewer').forEach(mv=>{
@@ -1427,146 +1076,63 @@ function captureGhost(src){
         });
         g.querySelectorAll('.toolbar,#loading,.tip-banner,.progress,.fs-dock,.fs-ctrl-layer').forEach(n=>n.remove());
         const r=src.getBoundingClientRect();
-        g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;transform:none;transform-origin:center center;';
-        /* 若源元素此刻处于 CSS 横屏（盒已旋转 90°），克隆继承的 transform 会让快照二次旋转；
-           上面已清掉克隆旋转，这里把截图自身旋回 90° 并撑满视觉盒，画面与真实屏幕一致 */
-        if(src.style.transform && src.style.transform.indexOf('rotate') >= 0){
-            const cw = r.width, ch = r.height;
-            g.querySelectorAll('img.fs-shot').forEach(im=>{
-                im.style.cssText = 'position:absolute;left:' + ((cw-ch)/2) + 'px;top:' + ((ch-cw)/2) + 'px;width:' + ch + 'px;height:' + cw + 'px;object-fit:fill;transform:rotate(90deg);display:block;border:0;';
-            });
-        }
+        g.style.cssText += ';position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;height:'+r.height+'px;margin:0;z-index:9003;pointer-events:none;overflow:hidden;';
         document.body.appendChild(g);
         return g;
     }catch(e){ return null; }
 }
-/* 快照向源卡片中心收缩淡出（构件全屏进/退用）：
-   收缩只走 CSS 关键帧，终点缩放值由 --gsc 注入 = 卡片实际比例，与底下真实卡片像素级重合。
-   刻意不用 requestAnimationFrame 起帧 —— 模型解码会长时间占住主线程，rAF 回调会被推迟，
-   动画就"卡住不动再突然出现"留下残影；CSS 动画在元素插入的首个合成帧自动播放，不受阻塞 */
-function collapseGhost(g, srcRect, vw, vh, dur){
-    if(!g) return;
-    const cx = ((srcRect.left + srcRect.width/2)/vw*100).toFixed(2);
-    const cy = ((srcRect.top + srcRect.height/2)/vh*100).toFixed(2);
-    const s = Math.max(0.12, Math.min(srcRect.width/vw, srcRect.height/vh));
-    g.style.transformOrigin = cx + '% ' + cy + '%';
-    g.style.setProperty('--gd', dur + 'ms');
-    g.style.setProperty('--xf', XFADE);
-    g.style.setProperty('--gsc', s.toFixed(4));
-    g.classList.add('fs-collapse');
-    setTimeout(()=>{ if(g.parentNode) g.remove(); }, dur+160);
-}
-/* 快照整体柔和淡出（整页退出/互切用）：真实画面已在快照底下就位，淡出即"慢慢显现"。
-   down=true 用于退出（向下沉），否则向上飘；同样是纯 CSS，插入即播，不依赖 rAF */
 function fadeGhostOut(g, opts){
     if(!g) return;
     opts = opts || {};
     const dur = opts.dur || XF_MS;
-    g.style.setProperty('--gd', dur + 'ms');
-    g.style.setProperty('--xf', XFADE);
+    /* 纯 CSS 动画：立即打上标记并设时长/方向，元素插入后的首个合成帧即自动播放，
+       不再依赖 requestAnimationFrame（主线程被模型复位阻塞、或切后台被限流时也照常消散），JS 只负责到时移除 */
+    g.style.setProperty('--gd', dur+'ms');
     g.classList.add('fs-go', opts.down ? 'down' : 'up');
     setTimeout(()=>{ if(g.parentNode) g.remove(); }, dur+160);
 }
 function exitFullscreen(){
     const state = fsState;
-    const { el, type, saved, bg, ctrl, rect, srcRect } = state;
+    const { el, type, saved, bg, ctrl, rect } = state;
+    /* 横屏复位放到 land() 里，避免退出瞬间闪跳 */
     state.exiting = true;
     try{ resetGestureState(false); }catch(e){}
     if(state.inTimer){ clearTimeout(state.inTimer); state.inTimer = null; }
     const switching = pendingFs; pendingFs = null;
+
     ctrl.querySelectorAll('.fs-ctrl').forEach(b=>{ b.style.transitionDelay='0ms'; b.classList.remove('show'); });
 
-    const vw = window.innerWidth, vh = window.innerHeight;
-
-    /* 退出第一步：先暂停自旋，再冻结当前全屏画面为静态快照盖顶（z-index 最高）。
-       自旋会让画布每帧重画并持续改变所有毛玻璃的采样源，与退场动画抢 GPU；
-       快照与画布此刻角度一致，冻结后过渡期间画面完全静止。
-       真实层随后在快照底下"安静复位"回主页 —— 这一整帧的变化被快照完全遮住，肉眼不可见，
-       所以不存在"啪一下跳回主页"的闪跳；接着让快照收拢回卡片位置并淡出，
-       底下已就位的真实主页同步慢慢显现 —— 一个连续动作，全程真实内容零重绘。
-       横屏退出例外：要先做旋转回正动画，此刻盖一张旋转快照反而多余（且回正后才好捕获），跳过 */
-    holdSpin();
-    const needGhostNow = !(type === 'model' && state.isLandscape && !switching);
-    const fsGhost = needGhostNow ? captureGhost(el) : null;
-
-    /* 横屏退出：先把画面平滑转回竖屏，再冻结快照收拢，避免旋转跳变 */
-    const unwindLandscape = (immediate, cb) => {
-        if(!state.isLandscape){ if(cb) cb(); return; }
-        state.isLandscape = false; state.wantLandscape = false; state.cssRotated = false;
-        try{ if(ctrl) ctrl.classList.remove('fs-ls'); }catch(e){}
-        fullWrap.classList.remove('ls-card');
-        el.style.left='0px'; el.style.top='0px';
-        el.style.width='100vw'; el.style.height='100vh';
-        if(immediate){
-            el.style.transition = 'none'; el.style.transformOrigin = 'center center'; el.style.transform = 'none';
-            void el.offsetHeight;
-            if(cb) cb();
-        } else {
-            el.style.transformOrigin = 'center center';
-            void el.offsetHeight;
-            requestAnimationFrame(()=>{
-                el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
-                el.style.transform = 'none';
-                setTimeout(cb, ORI_MS);
-            });
-        }
-    };
-
     if(switching){
-        /* 互切：快照盖顶并立即淡出 → 真实结构复位并重建新全屏，新画面在快照底下显现。
-           淡出紧跟捕获调用，不排到重建之后 —— 重建占主线程时动画已在合成线程跑起来了 */
-        if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
-        fadeGhostOut(fsGhost, {dur:XF_SW_MS});
-        if(type === 'model'){
-            unwindLandscape(true, ()=>{ restoreLayout(el, state, bg, ctrl, true); enterFullscreen(switching, true, {bg, ctrl}); });
-        } else {
-            restoreLayout(el, state, bg, ctrl, true); enterFullscreen(switching, true, {bg, ctrl});
-        }
-        return;
-    }
-
-    if(type === 'model'){
-        /* 退出构件全屏 = 进入的完全逆放：全屏快照收拢回卡片，底下主页同步显现。
-           横屏时先把画面平滑转回竖屏，再冻结快照 —— 快照不带旋转，收拢轨迹才正确。
-           注意：横屏分支必须等转回竖屏后再捕获，此时先前那张 fsGhost 要先撤掉，
-           否则它会永久留在页面上盖住内容 */
-        if(state.isLandscape){
-            unwindLandscape(false, ()=>{
-                const g = captureGhost(el);
-                if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
-                restoreLayout(el, state, bg, ctrl);
-                try{ safeResize(); }catch(e){}
-                collapseGhost(g, srcRect, vw, vh, XF_MS);
-                setTimeout(releaseSpin, ORI_MS + XF_MS + 160);
-            });
-        } else {
-            if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
-            collapseGhost(fsGhost, srcRect, vw, vh, XF_MS);
-            restoreLayout(el, state, bg, ctrl);
-            try{ safeResize(); }catch(e){}
-            setTimeout(releaseSpin, XF_MS + 160);
-        }
-    } else {
-        /* 退出整页全屏：整页层就是主页本身，快照盖顶后瞬间复位（被遮住看不见），
-           再让快照与遮罩同步柔和淡出 —— 视觉上就是全屏慢慢消失、底下主页慢慢显现。
-           两层用同一时长同一条曲线，透明度互补，全程不露空也不叠重。
-           画布重建挪到淡出结束之后：放动画起点会阻塞主线程，正是退出掉帧的来源 */
-        fadeGhostOut(fsGhost, {dur:XF_MS, down:true});
+        /* 互切：冻结旧全屏快照，真实结构立即复位并重建新全屏，新画面在快照下淡入、快照同时淡出（交叉淡化，无白闪） */
+        const ghost = captureGhost(el);
+        fadeGhostOut(ghost, {dur:XF_SW_MS});
         restoreLayout(el, state, bg, ctrl, true);
-        if(state.ph){ try{ state.ph.remove(); state.ph = null; }catch(e){} }
-        document.body.classList.remove('in-fs');
-        ctrl.remove();
-        try{ viewer.setAttribute('interaction-prompt','auto'); viewer.interactionPrompt='auto'; }catch(e){}
-        try{ syncControls(); }catch(e){}
-        bg.style.transition = 'opacity ' + XF_MS + 'ms ' + XFADE; bg.style.opacity = '0';
-        setTimeout(()=>{ try{ safeResize(); }catch(e){} bg.remove(); releaseSpin(); }, XF_MS + 120);
+        safeResize();
+        void el.offsetHeight;
+        enterFullscreen(switching, true, {bg, ctrl});
+    } else {
+        /* 退出：冻结全屏快照并立即纯 CSS 淡出；真实结构回到主页，主页与快照同档交叉淡化，速度均匀无残影 */
+        const ghost = captureGhost(el);
+        fadeGhostOut(ghost, {dur:XF_MS, down:true});
+        restoreLayout(el, state, bg, ctrl);
+        safeResize();
+        void el.offsetHeight;
+        fullWrap.style.transition='none'; fullWrap.style.opacity='0'; fullWrap.style.transform='translateY(8px)';
+        void fullWrap.offsetHeight;
+        let __exDone=false;
+        function finishExit(){ if(__exDone)return; __exDone=true;
+            fullWrap.style.transition='opacity '+XF_MS+'ms '+XFADE+',transform '+XF_MS+'ms '+XFADE;
+            fullWrap.style.opacity='1'; fullWrap.style.transform='translateY(0)';
+        }
+        requestAnimationFrame(()=>requestAnimationFrame(finishExit));
+        setTimeout(finishExit,150);
+        setTimeout(()=>{ fullWrap.style.transition=''; fullWrap.style.opacity=''; fullWrap.style.transform=''; try{ safeResize(); }catch(e){} }, XF_MS+160);
     }
 }
+
 function restoreLayout(el, state, bg, ctrl, keepOverlay){
     const { saved } = state;
     el.style.transition = 'none';
-    el.style.clipPath = '';
-    el.style.willChange = saved.willChange || '';
     el.style.transformOrigin = saved.transformOrigin;
     el.style.position = saved.position;
     el.style.left = saved.left; el.style.top = saved.top;
@@ -1579,9 +1145,15 @@ function restoreLayout(el, state, bg, ctrl, keepOverlay){
     fullWrap.style.zIndex = saved.wrapZ;
     fullWrap.classList.remove('fs-page','info-collapsed','model-backdrop','fs-exiting','ls-card');
     (function(){const ei=document.getElementById('btnEyeInline');if(ei){ei.innerHTML=ICON_EYE;ei.classList.remove('active');}})();
-    modelContainer.style.transform='none';modelContainer.style.transformOrigin='';const ic=document.getElementById('infoCard');if(ic){ic.style.transform='';ic.style.transition='';ic.style.opacity='';}
+    modelContainer.style.transform='none';modelContainer.style.transformOrigin='';const ic=document.getElementById('infoCard');if(ic){ic.style.transform='';ic.style.transition='';ic.style.opacity='';ic.style.maxHeight='';ic.style.padding='';}
     modelContainer.classList.remove('fs-model');
-    if(!keepOverlay){ document.body.classList.remove("in-fs"); bg.remove(); ctrl.remove(); }
+    if(!keepOverlay){
+        document.body.classList.remove("in-fs");
+        /* 退出：遮罩与按键层柔和淡出后再移除，避免瞬间抽掉背景造成白跳 */
+        try{ ctrl.style.transition='opacity .34s '+XFADE; ctrl.style.opacity='0'; }catch(e){}
+        try{ bg.style.transition='opacity '+XF_MS+'ms '+XFADE; bg.style.opacity='0'; }catch(e){}
+        setTimeout(()=>{ try{bg.remove();}catch(e){} try{ctrl.remove();}catch(e){} }, XF_MS+140);
+    }
     try{ viewer.setAttribute('interaction-prompt','auto'); viewer.interactionPrompt='auto'; }catch(e){}
     fsState = null;
     try{ syncControls(); }catch(e){}
@@ -1596,6 +1168,7 @@ function switchFullscreen(type){
     exitFullscreen();
 }
 
+
 function applyOrientation(){
     if(!fsState || fsState.type !== 'model') return;
     const want = !!fsState.wantLandscape;
@@ -1606,44 +1179,21 @@ function applyOrientation(){
     if(fsState.ctrl) fsState.ctrl.classList.toggle('fs-ls', css);
     fullWrap.classList.toggle('ls-card', css);
     try{ syncControls(); }catch(e){}
-    /* 横屏过渡（iOS 应用同款思路）：
-       之前"盒尺寸交换 + rotate 动画"同帧开跑，WebGL 画布重建会把动画头几帧顶住 = 点击卡顿；
-       现在改为：① 先暂停自旋再拍全屏快照盖顶（自旋不停，快照是静止的、底下画布还在转，
-       交叉淡化时两层角度对不上 = 你看到的"跳一下"）→ ② 快照底下瞬间切到横屏终态几何并重建画布
-       → ③ 快照交叉淡出，横屏画面从底下显现。
-       收尾只做"保角度重新取景"（半径适配新画布比例），绝不 resetCameraView 强扭视角。 */
-    holdSpin();
-    const g = captureGhost(el);
-    el.style.transition = 'none';
+    el.style.transition = 'transform ' + (ORI_MS/1000) + 's ' + ORI_EASE;
     el.style.transformOrigin = 'center center';
     if(css){
         el.style.left='50%'; el.style.top='50%';
         el.style.width='100vh'; el.style.height='100vw';
         el.style.transform='translate(-50%,-50%) rotate(90deg)';
     } else {
-        el.style.left='0px'; el.style.top='0px';
+        el.style.left='0'; el.style.top='0';
         el.style.width='100vw'; el.style.height='100vh';
         el.style.transform='none';
     }
-    void el.offsetHeight;
-    try{ safeResize(); }catch(e){}   /* 画布重建在快照底下进行 */
-    if(g) fadeGhostOut(g, {dur: Math.round(ORI_MS*.8)});
     try{ resetGestureState(true); }catch(e){}
     showToast(want ? '横屏模式' : '竖屏模式');
-    /* 淡出收尾：保持当前 theta/phi 不变，仅让半径按新画布比例重新取景，然后恢复自旋 */
-    setTimeout(function(){
-        try{
-            const o = viewer.getCameraOrbit();
-            camPinned = false; framedR = null;
-            viewer.cameraOrbit = (o.theta/DEG).toFixed(2)+'deg '+(o.phi/DEG).toFixed(2)+'deg auto';
-            viewer.jumpCameraToGoal();
-        }catch(e){}
-        setTimeout(()=>{
-            try{ safeResize(); }catch(e){}
-            try{ ensureAbsRadius(); }catch(e){}
-            releaseSpin();
-        }, 140);
-    }, ORI_MS + 60);
+    try{ safeResize(); }catch(e){}
+    setTimeout(function(){ resetCameraView(); setTimeout(safeResize, 80); }, 300);
 }
 function toggleLandscape(){
     if(!fsState || fsState.type !== 'model') return;
@@ -1702,7 +1252,7 @@ function pinCameraAbsolute(){
         const o = viewer.getCameraOrbit(); const r = Math.abs(o.radius);
         if(!(isFinite(r) && r > 0.1)) return false;
         framedR = r;
-        try{ viewer.setAttribute('min-camera-orbit','auto auto '+(r*0.12).toFixed(2)+'m'); viewer.setAttribute('max-camera-orbit','auto auto '+(r*2.6).toFixed(2)+'m'); }catch(e){}
+        try{ viewer.setAttribute('min-camera-orbit','auto 0deg '+(r*0.12).toFixed(2)+'m'); viewer.setAttribute('max-camera-orbit','auto 180deg '+(r*2.6).toFixed(2)+'m'); }catch(e){}
         viewer.cameraOrbit = (o.theta/DEG).toFixed(4)+'deg '+(o.phi/DEG).toFixed(4)+'deg '+r.toFixed(3)+'m';
         return true;
     }catch(e){ return false; }
@@ -1711,7 +1261,7 @@ function ensureAbsRadius(){ if(camPinned) return true; camPinned = pinCameraAbso
 /* 复位视角并在取景稳定后钉半径（进入/横竖屏切换调用），轮询应对相机异步 */
 function resetCameraView(){
     camPinned = false; panT = null;
-    try{ viewer.fieldOfView='30deg'; viewer.cameraTarget='0m 0m 0m'; viewer.cameraOrbit='0deg 75deg auto'; viewer.jumpCameraToGoal(); }catch(e){}
+    try{ viewer.cameraTarget='0m 0m 0m'; viewer.cameraOrbit='0deg 75deg auto'; viewer.jumpCameraToGoal(); freePitch=0; freeYaw=0; viewer.orientation='0deg 0deg 0deg'; }catch(e){}
     let tries = 0, lastR = -1, stable = 0;
     const t = setInterval(()=>{
         tries++;
@@ -1721,8 +1271,8 @@ function resetCameraView(){
             lastR = r;
             if(stable >= 1 || tries > 7){
                 framedR = r;
-        try{ viewer.setAttribute('min-camera-orbit','auto auto '+(r*0.12).toFixed(2)+'m'); viewer.setAttribute('max-camera-orbit','auto auto '+(r*2.6).toFixed(2)+'m'); }catch(e){} camPinned = true; clearInterval(t);
-                try{ viewer.cameraOrbit='0deg 75deg '+r.toFixed(3)+'m'; viewer.cameraTarget='0m 0m 0m'; viewer.jumpCameraToGoal(); }catch(e){}
+        try{ viewer.setAttribute('min-camera-orbit','auto 0deg '+(r*0.12).toFixed(2)+'m'); viewer.setAttribute('max-camera-orbit','auto 180deg '+(r*2.6).toFixed(2)+'m'); }catch(e){} camPinned = true; clearInterval(t);
+                try{ viewer.cameraOrbit='0deg 75deg '+r.toFixed(3)+'m'; viewer.cameraTarget='0m 0m 0m'; viewer.jumpCameraToGoal(); freePitch=0; freeYaw=0; viewer.orientation='0deg 0deg 0deg'; }catch(e){}
             }
         } else if(tries > 16){ clearInterval(t); }
     }, 100);
@@ -1758,28 +1308,46 @@ function clampRad(r){ const base=framedR||r; return Math.min(2.5*base, Math.max(
 function writeOrbit(theta, phi, r){
     if(!isFinite(theta)) theta = 0;
     if(!isFinite(phi)) phi = 75*DEG;
-    phi = Math.min(Math.PI-0.08, Math.max(0.08, phi));
+    phi = Math.min(Math.PI, Math.max(0, phi));
     if(!(isFinite(r) && r > 0.1)) r = framedR || radOf(viewer.getCameraOrbit());
     viewer.cameraOrbit = (theta/DEG).toFixed(3)+'deg '+(phi/DEG).toFixed(3)+'deg '+r.toFixed(3)+'m';
     viewer.jumpCameraToGoal();
 }
+/* 360°自由旋转：直接连续旋转"模型本体"(orientation)，没有相机 0~180 极角锁、也没有过极点翻面。
+   实测 model-viewer orientation 三角度对应固定世界轴 R=Ry(第3角)·Rx(第2角)·Rz(第1角)：
+   第3角=绕竖直轴水平转向、第2角=绕屏幕水平轴前后翻滚，均为固定世界轴，任意朝向下都贴合手指、无限连续。 */
+let freeMode = false;
+const FREE_GX = 0.0115, FREE_GY = 0.0115;  /* 垂直/水平灵敏度（弧度/像素），与原生轨道实测增益一致 */
+let freePitch = 0, freeYaw = 0;              /* 连续累积、无上下限，可平滑越过 180/360，不翻面 */
+function writeFreeOrientation(){
+    viewer.orientation='0deg '+(freePitch/DEG).toFixed(3)+'deg '+(freeYaw/DEG).toFixed(3)+'deg';
+    try{ viewer.jumpCameraToGoal(); }catch(err){}
+}
+/* 喂入"模型本地视口坐标系"位移：dx 向右+、dy 向下+ */
+function applyFreeTrack(dx,dy){
+    freePitch += -FREE_GX*dy;   /* 上下拖动：绕世界X连续翻滚（上拖看顶部、可越过底/顶无限转） */
+    freeYaw   +=  FREE_GY*dx;   /* 左右拖动：绕世界Y转向，方向与原生相机轨道(θ)互为反向、视觉一致 */
+    writeFreeOrientation();
+}
+function resetFree(){ freePitch = 0; freeYaw = 0; try{ viewer.orientation='0deg 0deg 0deg'; viewer.jumpCameraToGoal(); }catch(e){} }
+function stopAutoSpin(){ try{ if(rotate){ rotate=false; viewer.autoRotate=false; if(btnRotate) btnRotate.classList.remove('active'); document.querySelectorAll('.fs-autobtn').forEach(x=>x.classList.remove('active')); } }catch(e){} }
 
 /* ---------- 竖屏 / 真横屏 通用控制器（坐标与视口同向，无需换算）---------- */
 const pts = new Map();
 let pg = null;   /* {kind:'pan'|'pinch', last, d0, r0} */
 function pgDown(e){
     if(fsState && fsState.cssRotated) return;   /* 强制横屏交给 ls 控制器 */
-    if(!panMode) return;                          /* 旋转模式：原生处理单指旋转/双指 */
+    if(!panMode && !freeMode) return;            /* 默认旋转交原生；移动/360自由由自绘 */
     if(onUI(e)) return;
     if(e.pointerType === 'mouse' && e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();     /* 接管，阻止原生单指旋转 */
     pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
-    if(pts.size === 1){ pg = {kind:'pan', last:{x:e.clientX, y:e.clientY}}; ensureAbsRadius(); }
+    if(pts.size === 1){ ensureAbsRadius(); if(!panMode) stopAutoSpin(); pg = panMode ? {kind:'pan', last:{x:e.clientX, y:e.clientY}} : {kind:'orbit', last:{x:e.clientX, y:e.clientY}}; }
     else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:radOf(viewer.getCameraOrbit()), m0:{x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2}}; }
 }
 function pgMove(e){
     if(fsState && fsState.cssRotated) return;
-    if(!panMode || !pts.has(e.pointerId)) return;
+    if((!panMode && !freeMode) || !pts.has(e.pointerId)) return;
     if(onUI(e)) return;
     e.preventDefault(); e.stopPropagation();
     pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
@@ -1787,19 +1355,21 @@ function pgMove(e){
     const a = [...pts.values()];
     if(pg.kind === 'pinch' && pts.size >= 2){
         const m = {x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2};
-        if(pg.m0) applyPan(m.x-pg.m0.x, m.y-pg.m0.y);
+        if(panMode && pg.m0) applyPan(m.x-pg.m0.x, m.y-pg.m0.y);
         pg.m0 = m;
         const d = Math.max(1, Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y));
         const o = viewer.getCameraOrbit(); writeOrbit(o.theta, o.phi, clampRad(pg.r0*pg.d0/d));
         return;
     }
     if(pts.size !== 1) return;
-    applyPan(e.clientX-pg.last.x, e.clientY-pg.last.y);
+    const mdx = e.clientX-pg.last.x, mdy = e.clientY-pg.last.y;
+    if(pg.kind === 'orbit'){ applyFreeTrack(mdx, mdy); }
+    else { applyPan(mdx, mdy); }
     pg.last = {x:e.clientX, y:e.clientY};
 }
 function pgUp(e){
     if(pts.has(e.pointerId)) pts.delete(e.pointerId);
-    if(pts.size === 1){ const p=[...pts.values()][0]; pg = {kind:'pan', last:{...p}}; }
+    if(pts.size === 1){ const p=[...pts.values()][0]; pg = panMode ? {kind:'pan', last:{...p}} : {kind:'orbit', last:{...p}}; }
     else if(pts.size === 2){ const a=[...pts.values()]; pg = {kind:'pinch', d0:Math.max(1,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)), r0:radOf(viewer.getCameraOrbit()), m0:{x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2}}; }
     else { pg = null; }
 }
@@ -1824,7 +1394,7 @@ function lsDown(e){
     ensureAbsRadius();
     lsPts.set(e.pointerId, {x:e.clientX, y:e.clientY});
     const arr = [...lsPts.values()], o = viewer.getCameraOrbit();
-    if(lsPts.size === 1){ lsGesture = {kind:panMode?'pan':'orbit', last:{x:e.clientX,y:e.clientY}, o}; }
+    if(lsPts.size === 1){ if(!panMode) stopAutoSpin(); lsGesture = panMode ? {kind:'pan',last:{x:e.clientX,y:e.clientY}} : {kind:'orbit',last:{x:e.clientX,y:e.clientY}}; }
     else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o, r0:radOf(o), m0:{x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2}}; }
 }
 function lsMove(e){
@@ -1836,7 +1406,7 @@ function lsMove(e){
     const arr = [...lsPts.values()];
     if(lsGesture.kind === 'pinch' && lsPts.size >= 2){
         const m = {x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2};
-        if(lsGesture.m0){ const Lm=lsLocal(m.x-lsGesture.m0.x, m.y-lsGesture.m0.y); applyPan(Lm.x,Lm.y); }
+        if(panMode && lsGesture.m0){ const Lm=lsLocal(m.x-lsGesture.m0.x, m.y-lsGesture.m0.y); applyPan(Lm.x,Lm.y); }
         lsGesture.m0 = m;
         const d = Math.max(1, Math.hypot(arr[0].x-arr[1].x, arr[0].y-arr[1].y));
         const o = viewer.getCameraOrbit(); writeOrbit(o.theta, o.phi, clampRad(lsGesture.r0*lsGesture.d0/d));
@@ -1844,10 +1414,14 @@ function lsMove(e){
     }
     if(lsPts.size !== 1) return;
     const L = lsLocal(e.clientX-lsGesture.last.x, e.clientY-lsGesture.last.y);
-    const o = viewer.getCameraOrbit();
     if(lsGesture.kind === 'orbit'){
-        const g = 0.0062;
-        writeOrbit(o.theta + LS_THETA_SIGN*L.x*g, o.phi + LS_PHI_SIGN*L.y*g, radOf(o));
+        if(freeMode){
+            /* lsLocal 已把物理位移换算成模型本地坐标；模型自转 yaw 与相机θ反向，故直接喂本地坐标即可同向 */
+            applyFreeTrack(L.x, L.y);
+        }else{
+            const o = viewer.getCameraOrbit(), g = 0.0062;
+            writeOrbit(o.theta + LS_THETA_SIGN*L.x*g, o.phi + LS_PHI_SIGN*L.y*g, radOf(o));
+        }
     }else if(lsGesture.kind === 'pan'){
         applyPan(L.x, L.y);
     }
@@ -1857,7 +1431,7 @@ function lsUp(e){
     if(lsPts.has(e.pointerId)) lsPts.delete(e.pointerId);
     const arr = [...lsPts.values()];
     if(!(fsState && fsState.cssRotated)){ lsGesture = null; return; }
-    if(lsPts.size === 1){ lsGesture = {kind:panMode?'pan':'orbit', last:{...arr[0]}, o:viewer.getCameraOrbit()}; }
+    if(lsPts.size === 1){ lsGesture = panMode ? {kind:'pan',last:{...arr[0]}} : {kind:'orbit',last:{...arr[0]}}; }
     else if(lsPts.size === 2){ const d=Math.hypot(arr[0].x-arr[1].x,arr[0].y-arr[1].y); lsGesture = {kind:'pinch', d0:Math.max(1,d), o:viewer.getCameraOrbit(), r0:radOf(viewer.getCameraOrbit()), m0:{x:(arr[0].x+arr[1].x)/2, y:(arr[0].y+arr[1].y)/2}}; }
     else { lsGesture = null; }
 }
@@ -1893,37 +1467,51 @@ modelContainer.addEventListener('wheel', e => {
     writeOrbit(o.theta, o.phi, clampRad(radOf(o) * f));
 }, {capture:true, passive:false});
 
-function syncPanBtns(){ document.querySelectorAll('#btnPan,.fs-panbtn').forEach(b => b.classList.toggle('active', panMode)); }
+function syncModeBtns(){ document.querySelectorAll('#btnPan,.fs-panbtn').forEach(b => b.classList.toggle('active', panMode)); document.querySelectorAll('#btnFree,.fs-freebtn').forEach(b => b.classList.toggle('active', freeMode)); }
 /* 统一清空手势瞬时状态（触点/锚点/中键），避免锁屏、切后台、反复进出全屏、横竖屏切换后残留旧触点导致坐标错乱 */
 function resetGestureState(keepMode){
     if(!keepMode) panMode = false;
     gt = null; midPan = null; pg = null; lsGesture = null;
     try{ pts.clear(); }catch(e){}
     try{ lsPts.clear(); }catch(e){}
-    try{ syncPanBtns(); }catch(e){}
+    try{ syncModeBtns(); }catch(e){}
 }
 /* 统一原生/自绘控制器，保证手机触摸与电脑鼠标行为完全一致、绝不叠加：
    强制横屏(CSS旋转)：原生关闭，平移/旋转/捏合全由 ls 自绘（坐标需逆变换）；
    正常朝向：旋转模式交原生单指旋转；移动模式关闭原生，由 pg 自绘平移/捏合。 */
 function syncControls(){
     const ls = !!(fsState && fsState.cssRotated);
-    const nativeOn = ls ? false : !panMode;
+    const nativeOn = ls ? false : (!panMode && !freeMode);
     try{
         if(nativeOn) viewer.setAttribute('camera-controls',''); else viewer.removeAttribute('camera-controls');
         modelContainer.style.touchAction = 'none';
         viewer.style.touchAction = 'none';
     }catch(e){}
+    try{ syncModeBtns(); }catch(e){}
 }
 function setPanMode(on){
     panMode = !!on;
+    if(panMode) freeMode = false;
+    if(!freeMode){ try{ resetFree(); }catch(e){} }
     panT = null;
     try{ resetGestureState(true); }catch(e){}
-    if(panMode) ensureAbsRadius();
+    if(panMode || freeMode) ensureAbsRadius();
     syncControls();
-    syncPanBtns();
-    showToast(on ? '移动模式：单指拖移 · 双指缩放（双指拖动可平移）' : '旋转模式：单指旋转 · 双指缩放');
+    showToast(panMode ? '移动模式：单指拖移 · 双指缩放（双指拖动可平移）' : '旋转模式：单指旋转 · 双指缩放');
+}
+function setFreeMode(on){
+    freeMode = !!on;
+    if(freeMode) panMode = false;
+    panT = null;
+    try{ resetGestureState(true); }catch(e){}
+    if(panMode || freeMode) ensureAbsRadius();
+    if(freeMode){ stopAutoSpin(); }
+    resetFree();
+    syncControls();
+    showToast(freeMode ? '360°自由旋转：上下左右均可连续翻转 · 双指缩放' : '旋转模式：单指旋转 · 双指缩放');
 }
 btnPan.onclick = () => setPanMode(!panMode);
+btnFree.onclick = () => setFreeMode(!freeMode);
 /* 切后台/锁屏/页面隐藏时触摸常常收不到 pointerup，回前台丢弃残留触点（保留当前模式） */
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ try{ resetGestureState(true); }catch(e){} } });
 window.addEventListener('pagehide', ()=>{ try{ resetGestureState(true); }catch(e){} });
@@ -2030,6 +1618,7 @@ $('#adminClear').onclick = () => {
     location.reload();
 };
 $('#adminExport').onclick = () => {
+    if(adminOn && id && partData[id]){ Object.assign(partData[id], collectEdits()); }  /* 没先点保存也导出当前屏幕内容 */
     let txt = '// 构件数据总对象，网页读取所有构件信息\r\n';
     txt += '// 由管理员在页面“导出 data.js”生成：用本文件替换仓库中的 data.js，再用 GitHub Desktop 提交推送即可同步线上\r\n';
     txt += 'window.partData = ' + JSON.stringify(window.partData, null, 4) + ';\r\n';
@@ -2041,9 +1630,6 @@ $('#adminExport').onclick = () => {
     showToast('已导出 data.js，请替换仓库文件并提交', 2600);
 };
 
-/* ===================== 一键小窗（澎湃 OS 风格缩放/拖动） ===================== */
-const miniBackdrop=$('#miniBackdrop'), miniHint=$('#miniHint');
-let miniState=null;
 const shotMask=document.getElementById('shotMask'), shotImg=document.getElementById('shotImg');
 async function captureShot(){
     const v=document.getElementById('viewer');
@@ -2060,91 +1646,6 @@ document.getElementById('btnMini').onclick=captureShot;
 document.getElementById('shotClose').onclick=()=>shotMask.classList.remove('show');
 shotMask.addEventListener('click',e=>{ if(e.target===shotMask) shotMask.classList.remove('show'); });
 document.getElementById('shotSave').onclick=()=>{ const a=document.createElement('a'); a.href=shotImg.src; a.download='gangjiegou-model.png'; document.body.appendChild(a); a.click(); a.remove(); };
-function enterMini(){
-    const wrap=fullWrap, rect=wrap.getBoundingClientRect();
-    const s=46/rect.width, w=rect.width*s, h=rect.height*s;     // 收成右侧一条竖胶囊
-    const tx=window.innerWidth-(w-18)-rect.left;                 // 大部分藏到屏幕右缘外
-    let ty=(window.innerHeight-h)/2-rect.top;
-    ty=Math.max(8,Math.min(window.innerHeight-h-8,ty));
-    const drag=document.createElement('div'); drag.className='mini-drag';
-    wrap.appendChild(drag);
-    const tab=document.createElement('div'); tab.className='mini-edge-tab';
-    tab.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg>';
-    document.body.appendChild(tab);
-    miniBackdrop.classList.add('show'); document.body.classList.add('in-mini');
-    miniState={rect,s,tx,ty,w,h,drag,tab,wrap,
-        saved:{position:wrap.style.position,left:wrap.style.left,top:wrap.style.top,width:wrap.style.width,height:wrap.style.height,
-               z:wrap.style.zIndex,transition:wrap.style.transition,transform:wrap.style.transform,origin:wrap.style.transformOrigin,radius:wrap.style.borderRadius}};
-    wrap.style.transition='none';
-    wrap.style.position='fixed'; wrap.style.left=rect.left+'px'; wrap.style.top=rect.top+'px';
-    wrap.style.width=rect.width+'px'; wrap.style.height=rect.height+'px'; wrap.style.zIndex='9050';
-    wrap.style.transformOrigin='0 0'; wrap.style.transform='translate(0,0) scale(1)';
-    void wrap.offsetHeight;
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        wrap.classList.add('mini');
-        wrap.style.transition='transform .46s cubic-bezier(.32,.72,0,1),border-radius .46s ease';
-        wrap.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';
-        positionMiniTab();
-    }));
-    miniHint.innerText='已收到屏幕侧边 · 点竖条恢复';
-    miniHint.classList.add('show'); clearTimeout(miniHint._t);
-    miniHint._t=setTimeout(()=>miniHint.classList.remove('show'),2200);
-    setupEdgeDrag();
-}
-function positionMiniTab(){
-    const st=miniState; if(!st) return;
-    st.tab.style.top=(st.rect.top+st.ty+st.h/2)+'px';
-}
-function exitMini(){
-    if(!miniState) return;
-    const {wrap,drag,tab,saved}=miniState;
-    wrap.style.transition='transform .46s cubic-bezier(.32,.72,0,1),border-radius .46s ease';
-    wrap.style.transform='translate(0,0) scale(1)';
-    tab.classList.add('out');
-    miniBackdrop.classList.remove('show'); miniHint.classList.remove('show');
-    document.body.classList.remove('in-mini');
-    setTimeout(()=>{
-        wrap.classList.remove('mini');
-        wrap.style.position=saved.position;wrap.style.left=saved.left;wrap.style.top=saved.top;
-        wrap.style.width=saved.width;wrap.style.height=saved.height;wrap.style.zIndex=saved.z;
-        wrap.style.transition=saved.transition;wrap.style.transform=saved.transform;
-        wrap.style.transformOrigin=saved.origin;wrap.style.borderRadius=saved.radius;
-        drag.remove(); tab.remove(); miniState=null; safeResize();
-    },460);
-}
-function setupEdgeDrag(){
-    let sy=0,oy=0,moved=false;
-    const clampY=y=>Math.max(8,Math.min(window.innerHeight-miniState.h-8,y));
-    const move=e=>{
-        const st=miniState; if(!st) return;
-        const dy=e.clientY-sy;
-        if(Math.abs(dy)>6) moved=true;
-        st.ty=clampY(oy+dy);
-        st.wrap.style.transition='none';
-        st.wrap.style.transform='translate('+st.tx+'px,'+st.ty+'px) scale('+st.s+')';
-        positionMiniTab();
-    };
-    const up=()=>{
-        const st=miniState; if(!st) return;
-        window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',up);
-        if(!moved){ exitMini(); return; }   // 点按=恢复
-        st.wrap.style.transition='transform .32s cubic-bezier(.32,.72,0,1)';
-        st.wrap.style.transform='translate('+st.tx+'px,'+st.ty+'px) scale('+st.s+')';
-        st.tab.style.transition='top .32s cubic-bezier(.32,.72,0,1)'; positionMiniTab();
-    };
-    const down=e=>{
-        if(!miniState) return;
-        sy=e.clientY; oy=miniState.ty; moved=false;
-        miniState.tab.style.transition='none';
-        window.addEventListener('pointermove',move);
-        window.addEventListener('pointerup',up);
-        window.addEventListener('pointercancel',up);
-        e.preventDefault();
-    };
-    miniState.tab.addEventListener('pointerdown',down);
-    miniState.drag.addEventListener('pointerdown',down);
-}
-
 /* 功能按钮点按柔光光晕（静态按钮 + 动态生成按钮均可用） */
 function bindGlowPress(el){
     if(!el || el.__glowBound) return; el.__glowBound=true;
@@ -2152,15 +1653,14 @@ function bindGlowPress(el){
     el.addEventListener('pointerdown',function(e){
         const r=el.getBoundingClientRect();
         const x=(e.clientX||r.left+r.width/2)-r.left, y=(e.clientY||r.top+r.height/2)-r.top;
-        const d=Math.max(r.width,r.height)*2.1;
+        const d=Math.max(r.width,r.height)*2.6;
         const sp=document.createElement('span'); sp.className='gp-ripple';
         sp.style.left=x+'px'; sp.style.top=y+'px'; sp.style.width=d+'px'; sp.style.height=d+'px';
-        el.appendChild(sp); setTimeout(()=>sp.remove(),760);
+        el.appendChild(sp); setTimeout(()=>sp.remove(),640);
     });
+    /* 点按后立即失焦，清除手机 WebView 残留在按钮上的蓝色聚焦框（输入框除外） */
+    el.addEventListener('click',function(){ const t=el.tagName; if(t!=='INPUT'&&t!=='TEXTAREA'&&t!=='SELECT'){ try{ el.blur(); }catch(e){} } });
 }
-const floatGuide=$('#floatGuide');
-$('#floatGuideOk').onclick=()=>floatGuide.classList.remove('show');
-floatGuide.addEventListener('click',e=>{ if(e.target===floatGuide) floatGuide.classList.remove('show'); });
 document.querySelectorAll('.toolbar .btn,.icon-btn,.mbtn,.abtn').forEach(bindGlowPress);
 </script>
 </body>
